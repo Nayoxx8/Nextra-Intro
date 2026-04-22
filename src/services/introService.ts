@@ -1,6 +1,7 @@
 import {
   AttachmentBuilder,
   DiscordAPIError,
+  GuildMember,
   MessageFlags,
   type ModalSubmitInteraction,
   type TextChannel,
@@ -65,11 +66,14 @@ export async function handleIntroSubmit(
     }
 
     // Generate image
-    const avatarUrl =
-      user.displayAvatarURL({ extension: "png", size: 128 });
+    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 128 });
+    const displayName =
+      interaction.member instanceof GuildMember
+        ? interaction.member.displayName
+        : user.displayName;
     const imageBuffer = await generateIntroCard({
       avatarUrl,
-      username: interaction.guild?.members.cache.get(user.id)?.displayName ?? user.displayName,
+      username: displayName,
       questions,
       answers,
     });

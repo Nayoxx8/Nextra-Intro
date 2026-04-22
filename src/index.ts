@@ -6,7 +6,7 @@ import { registerInteractionHandler } from "./interactionHandler.js";
 import type { BotContext } from "./types.js";
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+  intents: [GatewayIntentBits.Guilds],
 });
 
 const context: BotContext = {
