@@ -8,7 +8,7 @@ import type { BotContext } from "../types.js";
 import { buildSetupEmbed, buildSetupComponents } from "../panels/setupPanel.js";
 
 export const introSetupCommand = new SlashCommandBuilder()
-  .setName("intro-setup")
+  .setName("自己紹介設定")
   .setDescription("自己紹介ボットの設定パネルを表示します")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false);

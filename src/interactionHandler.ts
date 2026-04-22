@@ -33,9 +33,9 @@ export function registerInteractionHandler(client: Client, context: BotContext):
     try {
       // ── Slash commands ──────────────────────────────────────────────────
       if (interaction.isChatInputCommand()) {
-        if (interaction.commandName === "intro-setup") {
+        if (interaction.commandName === "自己紹介設定") {
           await executeIntroSetup(interaction, context);
-        } else if (interaction.commandName === "intro-panel") {
+        } else if (interaction.commandName === "自己紹介パネル") {
           await executeIntroPanel(interaction, context);
         }
         return;

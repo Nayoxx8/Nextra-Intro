@@ -9,7 +9,7 @@ import type { BotContext } from "../types.js";
 import { buildIntroPanelEmbed, buildIntroPanelComponents } from "../panels/introPanel.js";
 
 export const introPanelCommand = new SlashCommandBuilder()
-  .setName("intro-panel")
+  .setName("自己紹介パネル")
   .setDescription("自己紹介作成パネルを表示チャンネルに投稿します")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false);
