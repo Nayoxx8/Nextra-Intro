@@ -7,7 +7,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import type { GuildQuestionRecord } from "../types.js";
+import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
 
 export const ADD_QUESTION_BUTTON_ID = "nextra-intro:setup:add-q";
 export const REMOVE_QUESTION_BUTTON_ID = "nextra-intro:setup:remove-q";
@@ -17,10 +17,14 @@ export const ADD_QUESTION_LABEL_INPUT_ID = "nextra-intro:setup:add-q:label";
 export const ADD_QUESTION_REQUIRED_INPUT_ID = "nextra-intro:setup:add-q:required";
 export const SET_CHANNEL_MODAL_ID = "nextra-intro:setup:set-channel:modal";
 export const SET_CHANNEL_INPUT_ID = "nextra-intro:setup:set-channel:input";
+export const TOGGLE_NAME_BUTTON_ID = "nextra-intro:setup:toggle-name";
+export const TOGGLE_AGE_BUTTON_ID = "nextra-intro:setup:toggle-age";
+export const TOGGLE_GENDER_BUTTON_ID = "nextra-intro:setup:toggle-gender";
 
 export function buildSetupEmbed(
   questions: GuildQuestionRecord[],
-  displayChannelId: string | null
+  displayChannelId: string | null,
+  basic: GuildBasicSettingRecord
 ): EmbedBuilder {
   const channelText = displayChannelId ? `<#${displayChannelId}>` : "未設定";
   const questionLines =
@@ -28,34 +32,59 @@ export function buildSetupEmbed(
       ? "質問なし"
       : questions.map((q, i) => `**${i + 1}.** ${q.label}${q.required ? "（必須）" : "（任意）"}`).join("\n");
 
+  const basicLines = [
+    `名前: ${basic.nameEnabled ? "✅ ON" : "❌ OFF"}`,
+    `年齢: ${basic.ageEnabled ? "✅ ON" : "❌ OFF"}`,
+    `性別: ${basic.genderEnabled ? "✅ ON" : "❌ OFF"}`,
+  ].join("　");
+
   return new EmbedBuilder()
     .setTitle("自己紹介 設定パネル")
     .setColor(0x5865f2)
     .addFields(
       { name: "表示チャンネル", value: channelText, inline: false },
-      { name: `質問一覧（${questions.length}/5）`, value: questionLines, inline: false }
+      { name: "基礎質問", value: basicLines, inline: false },
+      { name: `カスタム質問（${questions.length}/5）`, value: questionLines, inline: false }
     );
 }
 
-export function buildSetupComponents(questionCount: number): ActionRowBuilder<ButtonBuilder>[] {
-  const addBtn = new ButtonBuilder()
-    .setCustomId(ADD_QUESTION_BUTTON_ID)
-    .setLabel("質問を追加")
-    .setStyle(ButtonStyle.Primary)
-    .setDisabled(questionCount >= 5);
+export function buildSetupComponents(
+  questionCount: number,
+  basic: GuildBasicSettingRecord
+): ActionRowBuilder<ButtonBuilder>[] {
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(ADD_QUESTION_BUTTON_ID)
+      .setLabel("質問を追加")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(questionCount >= 5),
+    new ButtonBuilder()
+      .setCustomId(REMOVE_QUESTION_BUTTON_ID)
+      .setLabel("質問を削除")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(questionCount === 0),
+    new ButtonBuilder()
+      .setCustomId(SET_CHANNEL_BUTTON_ID)
+      .setLabel("チャンネルを設定")
+      .setStyle(ButtonStyle.Secondary)
+  );
 
-  const removeBtn = new ButtonBuilder()
-    .setCustomId(REMOVE_QUESTION_BUTTON_ID)
-    .setLabel("質問を削除")
-    .setStyle(ButtonStyle.Danger)
-    .setDisabled(questionCount === 0);
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(TOGGLE_NAME_BUTTON_ID)
+      .setLabel(`名前: ${basic.nameEnabled ? "ON" : "OFF"}`)
+      .setStyle(basic.nameEnabled ? ButtonStyle.Success : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(TOGGLE_AGE_BUTTON_ID)
+      .setLabel(`年齢: ${basic.ageEnabled ? "ON" : "OFF"}`)
+      .setStyle(basic.ageEnabled ? ButtonStyle.Success : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(TOGGLE_GENDER_BUTTON_ID)
+      .setLabel(`性別: ${basic.genderEnabled ? "ON" : "OFF"}`)
+      .setStyle(basic.genderEnabled ? ButtonStyle.Success : ButtonStyle.Secondary)
+  );
 
-  const channelBtn = new ButtonBuilder()
-    .setCustomId(SET_CHANNEL_BUTTON_ID)
-    .setLabel("チャンネルを設定")
-    .setStyle(ButtonStyle.Secondary);
-
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(addBtn, removeBtn, channelBtn)];
+  return [row1, row2];
 }
 
 export function buildAddQuestionModal(): ModalBuilder {

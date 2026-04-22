@@ -1,7 +1,9 @@
 import prisma from "../lib/prisma.js";
-import type { GuildSettingRecord, GuildQuestionRecord, UserIntroRecord } from "../types.js";
+import type { GuildSettingRecord, GuildBasicSettingRecord, GuildQuestionRecord, UserIntroRecord } from "../types.js";
 
 export class IntroRepository {
+  // ── Guild settings ───────────────────────────────────────────────────────
+
   async getGuildSetting(guildId: string): Promise<GuildSettingRecord | null> {
     const row = await prisma.guildSetting.findUnique({ where: { guildId } });
     if (!row) return null;
@@ -26,6 +28,39 @@ export class IntroRepository {
       },
     });
   }
+
+  // ── Basic settings ───────────────────────────────────────────────────────
+
+  async getBasicSetting(guildId: string): Promise<GuildBasicSettingRecord> {
+    const row = await prisma.guildBasicSetting.findUnique({ where: { guildId } });
+    return {
+      guildId,
+      nameEnabled: row?.nameEnabled ?? true,
+      ageEnabled: row?.ageEnabled ?? true,
+      genderEnabled: row?.genderEnabled ?? true,
+    };
+  }
+
+  async toggleBasicField(
+    guildId: string,
+    field: "nameEnabled" | "ageEnabled" | "genderEnabled"
+  ): Promise<GuildBasicSettingRecord> {
+    const current = await this.getBasicSetting(guildId);
+    const updated = { ...current, [field]: !current[field] };
+    await prisma.guildBasicSetting.upsert({
+      where: { guildId },
+      create: {
+        guildId,
+        nameEnabled: updated.nameEnabled,
+        ageEnabled: updated.ageEnabled,
+        genderEnabled: updated.genderEnabled,
+      },
+      update: { [field]: updated[field] },
+    });
+    return updated;
+  }
+
+  // ── Questions ────────────────────────────────────────────────────────────
 
   async getQuestions(guildId: string): Promise<GuildQuestionRecord[]> {
     const rows = await prisma.guildQuestion.findMany({
@@ -61,6 +96,8 @@ export class IntroRepository {
     });
   }
 
+  // ── User intros ──────────────────────────────────────────────────────────
+
   async getUserIntro(guildId: string, userId: string): Promise<UserIntroRecord | null> {
     const row = await prisma.userIntro.findUnique({
       where: { guildId_userId: { guildId, userId } },
@@ -70,6 +107,9 @@ export class IntroRepository {
       guildId: row.guildId,
       userId: row.userId,
       answers: row.answers as Record<string, string>,
+      basicName: row.basicName,
+      basicAge: row.basicAge,
+      basicGender: row.basicGender,
       messageId: row.messageId,
     };
   }
@@ -77,13 +117,26 @@ export class IntroRepository {
   async saveUserIntro(
     guildId: string,
     userId: string,
-    answers: Record<string, string>,
-    messageId: string | null
+    data: {
+      answers?: Record<string, string>;
+      basicName?: string | null;
+      basicAge?: string | null;
+      basicGender?: string | null;
+      messageId?: string | null;
+    }
   ): Promise<void> {
+    const existing = await this.getUserIntro(guildId, userId);
+    const merged = {
+      answers: data.answers ?? existing?.answers ?? {},
+      basicName: data.basicName !== undefined ? data.basicName : (existing?.basicName ?? null),
+      basicAge: data.basicAge !== undefined ? data.basicAge : (existing?.basicAge ?? null),
+      basicGender: data.basicGender !== undefined ? data.basicGender : (existing?.basicGender ?? null),
+      messageId: data.messageId !== undefined ? data.messageId : (existing?.messageId ?? null),
+    };
     await prisma.userIntro.upsert({
       where: { guildId_userId: { guildId, userId } },
-      create: { guildId, userId, answers, messageId },
-      update: { answers, messageId },
+      create: { guildId, userId, ...merged },
+      update: merged,
     });
   }
 }

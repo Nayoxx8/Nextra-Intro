@@ -1,7 +1,7 @@
 import { createCanvas, loadImage, GlobalFonts, type Canvas } from "@napi-rs/canvas";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import type { GuildQuestionRecord } from "../types.js";
+import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = join(__dirname, "../assets/fonts");
@@ -21,12 +21,33 @@ const AVATAR_RADIUS = 50;
 const AVATAR_Y = 36;
 const USERNAME_Y = 175;
 const DIVIDER_Y = 198;
-const QUESTIONS_START_Y = 230;
+const BASIC_ROW_HEIGHT = 52;
 const ROW_HEIGHT = 76;
 const FOOTER_HEIGHT = 48;
 
-function computeHeight(questionCount: number): number {
-  return Math.max(340, QUESTIONS_START_Y + questionCount * ROW_HEIGHT + FOOTER_HEIGHT);
+type BasicFields = {
+  name?: string | null;
+  age?: string | null;
+  gender?: string | null;
+};
+
+function getActiveBasicFields(
+  basic: GuildBasicSettingRecord,
+  fields: BasicFields
+): { label: string; value: string }[] {
+  const result: { label: string; value: string }[] = [];
+  if (basic.nameEnabled) result.push({ label: "名前", value: fields.name ?? "" });
+  if (basic.ageEnabled) result.push({ label: "年齢", value: fields.age ?? "" });
+  if (basic.genderEnabled) result.push({ label: "性別", value: fields.gender ?? "" });
+  return result;
+}
+
+function computeHeight(
+  basicCount: number,
+  questionCount: number
+): number {
+  const basicSection = basicCount > 0 ? basicCount * BASIC_ROW_HEIGHT + 16 : 0;
+  return Math.max(340, DIVIDER_Y + basicSection + questionCount * ROW_HEIGHT + FOOTER_HEIGHT + 32);
 }
 
 function drawRoundedRect(
@@ -55,11 +76,9 @@ function wrapText(
   text: string,
   maxWidth: number
 ): string[] {
-  const words = text.split("");
   const lines: string[] = [];
   let current = "";
-
-  for (const ch of words) {
+  for (const ch of text.split("")) {
     const test = current + ch;
     if (ctx.measureText(test).width > maxWidth && current.length > 0) {
       lines.push(current);
@@ -75,15 +94,19 @@ function wrapText(
 export async function generateIntroCard(params: {
   avatarUrl: string;
   username: string;
+  basic: GuildBasicSettingRecord;
+  basicFields: BasicFields;
   questions: GuildQuestionRecord[];
   answers: Record<string, string>;
 }): Promise<Buffer> {
   ensureFonts();
 
-  const { avatarUrl, username, questions, answers } = params;
-  const height = computeHeight(questions.length);
+  const { avatarUrl, username, basic, basicFields, questions, answers } = params;
+  const activeBasic = getActiveBasicFields(basic, basicFields);
+  const height = computeHeight(activeBasic.length, questions.length);
   const canvas = createCanvas(CARD_WIDTH, height);
   const ctx = canvas.getContext("2d");
+  const maxTextWidth = CARD_WIDTH - PADDING * 2;
 
   // Background gradient
   const grad = ctx.createLinearGradient(0, 0, 0, height);
@@ -92,13 +115,13 @@ export async function generateIntroCard(params: {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, CARD_WIDTH, height);
 
-  // Subtle inner glow border
+  // Border
   ctx.strokeStyle = "rgba(88, 101, 242, 0.3)";
   ctx.lineWidth = 2;
   drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, height - 2, 12);
   ctx.stroke();
 
-  // Avatar circle
+  // Avatar
   const avatarX = CARD_WIDTH / 2;
   const avatarCenterY = AVATAR_Y + AVATAR_RADIUS;
   try {
@@ -110,15 +133,12 @@ export async function generateIntroCard(params: {
     ctx.clip();
     ctx.drawImage(avatarImg, avatarX - AVATAR_RADIUS, AVATAR_Y, AVATAR_RADIUS * 2, AVATAR_RADIUS * 2);
     ctx.restore();
-
-    // Avatar border ring
     ctx.strokeStyle = "#5865f2";
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(avatarX, avatarCenterY, AVATAR_RADIUS + 3, 0, Math.PI * 2);
     ctx.stroke();
   } catch {
-    // Avatar fallback: colored circle
     ctx.fillStyle = "#5865f2";
     ctx.beginPath();
     ctx.arc(avatarX, avatarCenterY, AVATAR_RADIUS, 0, Math.PI * 2);
@@ -129,9 +149,9 @@ export async function generateIntroCard(params: {
   ctx.font = "bold 22px NotoSansJP";
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
-  ctx.fillText(username, avatarX, USERNAME_Y, CARD_WIDTH - PADDING * 2);
+  ctx.fillText(username, avatarX, USERNAME_Y, maxTextWidth);
 
-  // Divider
+  // Divider after header
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -139,24 +159,49 @@ export async function generateIntroCard(params: {
   ctx.lineTo(CARD_WIDTH - PADDING, DIVIDER_Y);
   ctx.stroke();
 
-  // Q&A rows
-  const maxTextWidth = CARD_WIDTH - PADDING * 2;
-  let currentY = QUESTIONS_START_Y;
+  let currentY = DIVIDER_Y + 24;
 
+  // ── Basic fields section ─────────────────────────────────────────────────
+  if (activeBasic.length > 0) {
+    for (const { label, value } of activeBasic) {
+      // Label
+      ctx.font = "bold 13px NotoSansJP";
+      ctx.fillStyle = "#a0a0c0";
+      ctx.textAlign = "left";
+      ctx.fillText(label, PADDING, currentY);
+
+      // Value
+      ctx.font = "16px NotoSansJP";
+      ctx.fillStyle = value ? "#ffffff" : "#606080";
+      ctx.fillText(value || "（未入力）", PADDING, currentY + 22, maxTextWidth);
+
+      currentY += BASIC_ROW_HEIGHT;
+    }
+
+    // Divider between basic and custom Q&A
+    if (questions.length > 0) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(PADDING, currentY);
+      ctx.lineTo(CARD_WIDTH - PADDING, currentY);
+      ctx.stroke();
+      currentY += 16;
+    }
+  }
+
+  // ── Custom Q&A rows ──────────────────────────────────────────────────────
   for (const q of questions) {
     const answerText = answers[String(q.orderIndex)] ?? "";
 
-    // Question label
     ctx.font = "bold 13px NotoSansJP";
     ctx.fillStyle = "#a0a0c0";
     ctx.textAlign = "left";
     ctx.fillText(q.label, PADDING, currentY, maxTextWidth);
 
-    // Answer text with wrapping
     ctx.font = "16px NotoSansJP";
     ctx.fillStyle = answerText ? "#ffffff" : "#606080";
-    const displayText = answerText || "（未入力）";
-    const lines = wrapText(ctx, displayText, maxTextWidth);
+    const lines = wrapText(ctx, answerText || "（未入力）", maxTextWidth);
     let lineY = currentY + 24;
     for (const line of lines.slice(0, 2)) {
       ctx.fillText(line, PADDING, lineY, maxTextWidth);
@@ -165,7 +210,6 @@ export async function generateIntroCard(params: {
 
     currentY += ROW_HEIGHT;
 
-    // Row separator (except after last)
     if (q.orderIndex < questions.length - 1) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
@@ -176,7 +220,7 @@ export async function generateIntroCard(params: {
     }
   }
 
-  // Bottom divider
+  // Bottom divider + watermark
   const bottomDividerY = height - FOOTER_HEIGHT + 4;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
@@ -185,7 +229,6 @@ export async function generateIntroCard(params: {
   ctx.lineTo(CARD_WIDTH - PADDING, bottomDividerY);
   ctx.stroke();
 
-  // Nextra watermark
   ctx.font = "11px NotoSansJP";
   ctx.fillStyle = "#404060";
   ctx.textAlign = "right";

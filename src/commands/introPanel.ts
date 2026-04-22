@@ -23,43 +23,37 @@ export async function executeIntroPanel(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const setting = await context.repo.getGuildSetting(guildId);
+  const [setting, basic] = await Promise.all([
+    context.repo.getGuildSetting(guildId),
+    context.repo.getBasicSetting(guildId),
+  ]);
+
   if (!setting?.displayChannelId) {
-    await interaction.editReply({
-      content: "先に `/intro-setup` で表示チャンネルを設定してください。",
-    });
+    await interaction.editReply({ content: "先に `/自己紹介設定` で表示チャンネルを設定してください。" });
     return;
   }
 
-  const channel = await interaction.client.channels
-    .fetch(setting.displayChannelId)
-    .catch(() => null);
-
+  const channel = await interaction.client.channels.fetch(setting.displayChannelId).catch(() => null);
   if (!channel || !channel.isTextBased()) {
     await interaction.editReply({ content: "表示チャンネルが見つかりません。チャンネルを再設定してください。" });
     return;
   }
 
-  // Disable old panel if exists
+  const hasBasic = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
+
+  // Disable old panel
   if (setting.panelMessageId) {
     try {
       const old = await (channel as TextChannel).messages.fetch(setting.panelMessageId);
-      await old.edit({ components: buildIntroPanelComponents(true) });
-    } catch {
-      // Already gone
-    }
+      await old.edit({ components: buildIntroPanelComponents(true, hasBasic) });
+    } catch { /* already gone */ }
   }
 
-  // Post new panel
   const sent = await (channel as TextChannel).send({
     embeds: [buildIntroPanelEmbed()],
-    components: buildIntroPanelComponents(),
+    components: buildIntroPanelComponents(false, hasBasic),
   });
 
-  await context.repo.upsertGuildSetting({
-    guildId,
-    panelMessageId: sent.id,
-  });
-
+  await context.repo.upsertGuildSetting({ guildId, panelMessageId: sent.id });
   await interaction.editReply({ content: `<#${setting.displayChannelId}> にパネルを投稿しました。` });
 }

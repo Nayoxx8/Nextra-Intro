@@ -12,20 +12,17 @@ import { buildIntroPanelComponents } from "../panels/introPanel.js";
 
 const inFlightUsers = new Set<string>();
 
-export async function handleIntroSubmit(
+async function postOrEditImage(
   interaction: ModalSubmitInteraction,
   context: BotContext,
-  questions: GuildQuestionRecord[]
+  guildId: string,
+  buildImageFn: () => Promise<Buffer>,
+  saveData: Parameters<BotContext["repo"]["saveUserIntro"]>[2]
 ): Promise<void> {
-  const { guildId, user } = interaction;
-  if (!guildId) return;
-
+  const { user } = interaction;
   const key = `${guildId}:${user.id}`;
   if (inFlightUsers.has(key)) {
-    await interaction.reply({
-      content: "処理中です。しばらくお待ちください。",
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply({ content: "処理中です。しばらくお待ちください。", flags: MessageFlags.Ephemeral });
     return;
   }
   inFlightUsers.add(key);
@@ -33,26 +30,6 @@ export async function handleIntroSubmit(
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Collect answers from modal fields
-    const answers: Record<string, string> = {};
-    for (const q of questions) {
-      try {
-        const val = interaction.fields.getTextInputValue(`nextra-intro:answer:${q.orderIndex}`).trim();
-        if (val) answers[String(q.orderIndex)] = val;
-      } catch {
-        // Optional field not filled
-      }
-    }
-
-    // Validate required fields
-    for (const q of questions) {
-      if (q.required && !answers[String(q.orderIndex)]) {
-        await interaction.editReply({ content: `「${q.label}」は必須項目です。` });
-        return;
-      }
-    }
-
-    // Check display channel is configured
     const setting = await context.repo.getGuildSetting(guildId);
     if (!setting?.displayChannelId) {
       await interaction.editReply({ content: "表示チャンネルが設定されていません。管理者に連絡してください。" });
@@ -65,21 +42,9 @@ export async function handleIntroSubmit(
       return;
     }
 
-    // Generate image
-    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 128 });
-    const displayName =
-      interaction.member instanceof GuildMember
-        ? interaction.member.displayName
-        : user.displayName;
-    const imageBuffer = await generateIntroCard({
-      avatarUrl,
-      username: displayName,
-      questions,
-      answers,
-    });
+    const imageBuffer = await buildImageFn();
     const attachment = new AttachmentBuilder(imageBuffer, { name: `intro-${user.id}.png` });
 
-    // Get existing intro to update or post new
     const existing = await context.repo.getUserIntro(guildId, user.id);
     let newMessageId: string | null = null;
 
@@ -90,7 +55,6 @@ export async function handleIntroSubmit(
         newMessageId = edited.id;
       } catch (err) {
         if (err instanceof DiscordAPIError && err.code === 10008) {
-          // Message was deleted, post a new one
           const sent = await (channel as TextChannel).send({ files: [attachment] });
           newMessageId = sent.id;
           await refreshPanelToBottom(channel as TextChannel, setting.panelMessageId);
@@ -104,10 +68,123 @@ export async function handleIntroSubmit(
       await refreshPanelToBottom(channel as TextChannel, setting.panelMessageId);
     }
 
-    await context.repo.saveUserIntro(guildId, user.id, answers, newMessageId);
+    await context.repo.saveUserIntro(guildId, user.id, { ...saveData, messageId: newMessageId });
     await interaction.editReply({ content: "自己紹介を保存しました！" });
   } finally {
     inFlightUsers.delete(key);
+  }
+}
+
+export async function handleIntroSubmit(
+  interaction: ModalSubmitInteraction,
+  context: BotContext,
+  questions: GuildQuestionRecord[]
+): Promise<void> {
+  const { guildId, user } = interaction;
+  if (!guildId) return;
+
+  // Collect answers
+  const answers: Record<string, string> = {};
+  for (const q of questions) {
+    try {
+      const val = interaction.fields.getTextInputValue(`nextra-intro:answer:${q.orderIndex}`).trim();
+      if (val) answers[String(q.orderIndex)] = val;
+    } catch { /* optional field */ }
+  }
+
+  // Validate required fields
+  for (const q of questions) {
+    if (q.required && !answers[String(q.orderIndex)]) {
+      await interaction.reply({ content: `「${q.label}」は必須項目です。`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+  }
+
+  const [basic, existing] = await Promise.all([
+    context.repo.getBasicSetting(guildId),
+    context.repo.getUserIntro(guildId, user.id),
+  ]);
+
+  const displayName =
+    interaction.member instanceof GuildMember
+      ? interaction.member.displayName
+      : user.displayName;
+
+  await postOrEditImage(
+    interaction,
+    context,
+    guildId,
+    () => generateIntroCard({
+      avatarUrl: user.displayAvatarURL({ extension: "png", size: 128 }),
+      username: displayName,
+      basic,
+      basicFields: {
+        name: existing?.basicName,
+        age: existing?.basicAge,
+        gender: existing?.basicGender,
+      },
+      questions,
+      answers,
+    }),
+    { answers }
+  );
+}
+
+export async function handleBasicSubmit(
+  interaction: ModalSubmitInteraction,
+  context: BotContext
+): Promise<void> {
+  const { guildId, user } = interaction;
+  if (!guildId) return;
+
+  const basic = await context.repo.getBasicSetting(guildId);
+
+  const basicName = basic.nameEnabled
+    ? (getField(interaction, "nextra-intro:basic:name") ?? null)
+    : undefined;
+  const basicAge = basic.ageEnabled
+    ? (getField(interaction, "nextra-intro:basic:age") ?? null)
+    : undefined;
+  const basicGender = basic.genderEnabled
+    ? (getField(interaction, "nextra-intro:basic:gender") ?? null)
+    : undefined;
+
+  const [questions, existing] = await Promise.all([
+    context.repo.getQuestions(guildId),
+    context.repo.getUserIntro(guildId, user.id),
+  ]);
+
+  const displayName =
+    interaction.member instanceof GuildMember
+      ? interaction.member.displayName
+      : user.displayName;
+
+  await postOrEditImage(
+    interaction,
+    context,
+    guildId,
+    () => generateIntroCard({
+      avatarUrl: user.displayAvatarURL({ extension: "png", size: 128 }),
+      username: displayName,
+      basic,
+      basicFields: {
+        name: basicName ?? existing?.basicName,
+        age: basicAge ?? existing?.basicAge,
+        gender: basicGender ?? existing?.basicGender,
+      },
+      questions,
+      answers: existing?.answers ?? {},
+    }),
+    { basicName, basicAge, basicGender }
+  );
+}
+
+function getField(interaction: ModalSubmitInteraction, customId: string): string | null {
+  try {
+    const val = interaction.fields.getTextInputValue(customId).trim();
+    return val || null;
+  } catch {
+    return null;
   }
 }
 
@@ -121,11 +198,6 @@ async function refreshPanelToBottom(
     const embed = panelMsg.embeds[0];
     if (!embed) return;
     await panelMsg.delete();
-    await channel.send({
-      embeds: [embed],
-      components: buildIntroPanelComponents(),
-    });
-  } catch {
-    // Panel already gone or permission issue — ignore
-  }
+    await channel.send({ embeds: [embed], components: buildIntroPanelComponents() });
+  } catch { /* ignore */ }
 }

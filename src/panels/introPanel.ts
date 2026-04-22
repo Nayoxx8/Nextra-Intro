@@ -2,6 +2,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "disc
 
 export const CREATE_INTRO_BUTTON_ID = "nextra-intro:user:create";
 export const EDIT_INTRO_BUTTON_ID = "nextra-intro:user:edit";
+export const BASIC_INTRO_BUTTON_ID = "nextra-intro:user:basic";
 
 export function buildIntroPanelEmbed(): EmbedBuilder {
   return new EmbedBuilder()
@@ -12,7 +13,10 @@ export function buildIntroPanelEmbed(): EmbedBuilder {
     );
 }
 
-export function buildIntroPanelComponents(disabled = false): ActionRowBuilder<ButtonBuilder>[] {
+export function buildIntroPanelComponents(
+  disabled = false,
+  hasBasic = true
+): ActionRowBuilder<ButtonBuilder>[] {
   const createBtn = new ButtonBuilder()
     .setCustomId(CREATE_INTRO_BUTTON_ID)
     .setLabel("自己紹介を作成")
@@ -25,5 +29,15 @@ export function buildIntroPanelComponents(disabled = false): ActionRowBuilder<Bu
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(disabled);
 
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(createBtn, editBtn)];
+  const basicBtn = new ButtonBuilder()
+    .setCustomId(BASIC_INTRO_BUTTON_ID)
+    .setLabel("基礎質問に回答する")
+    .setStyle(ButtonStyle.Success)
+    .setDisabled(disabled);
+
+  const buttons = hasBasic
+    ? [createBtn, editBtn, basicBtn]
+    : [createBtn, editBtn];
+
+  return [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)];
 }
