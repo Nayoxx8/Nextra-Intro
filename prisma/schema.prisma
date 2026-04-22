@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["nextra_intro"]
 }
 
 model GuildSetting {
@@ -13,6 +15,7 @@ model GuildSetting {
   panelMessageId   String? @map("panel_message_id")
 
   @@map("guild_settings")
+  @@schema("nextra_intro")
 }
 
 model GuildQuestion {
@@ -23,6 +26,7 @@ model GuildQuestion {
 
   @@id([guildId, orderIndex])
   @@map("guild_questions")
+  @@schema("nextra_intro")
 }
 
 model UserIntro {
@@ -33,4 +37,5 @@ model UserIntro {
 
   @@id([guildId, userId])
   @@map("user_intros")
+  @@schema("nextra_intro")
 }
