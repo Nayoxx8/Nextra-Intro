@@ -13,10 +13,7 @@ export function buildIntroPanelEmbed(): EmbedBuilder {
     );
 }
 
-export function buildIntroPanelComponents(
-  disabled = false,
-  hasBasic = true
-): ActionRowBuilder<ButtonBuilder>[] {
+export function buildIntroPanelComponents(disabled = false): ActionRowBuilder<ButtonBuilder>[] {
   const createBtn = new ButtonBuilder()
     .setCustomId(CREATE_INTRO_BUTTON_ID)
     .setLabel("自己紹介を作成")
@@ -35,9 +32,5 @@ export function buildIntroPanelComponents(
     .setStyle(ButtonStyle.Success)
     .setDisabled(disabled);
 
-  const buttons = hasBasic
-    ? [createBtn, editBtn, basicBtn]
-    : [createBtn, editBtn];
-
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)];
+  return [new ActionRowBuilder<ButtonBuilder>().addComponents(createBtn, editBtn, basicBtn)];
 }

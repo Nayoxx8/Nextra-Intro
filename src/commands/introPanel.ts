@@ -23,10 +23,7 @@ export async function executeIntroPanel(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const [setting, basic] = await Promise.all([
-    context.repo.getGuildSetting(guildId),
-    context.repo.getBasicSetting(guildId),
-  ]);
+  const setting = await context.repo.getGuildSetting(guildId);
 
   if (!setting?.displayChannelId) {
     await interaction.editReply({ content: "先に `/自己紹介設定` で表示チャンネルを設定してください。" });
@@ -39,19 +36,17 @@ export async function executeIntroPanel(
     return;
   }
 
-  const hasBasic = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
-
   // Disable old panel
   if (setting.panelMessageId) {
     try {
       const old = await (channel as TextChannel).messages.fetch(setting.panelMessageId);
-      await old.edit({ components: buildIntroPanelComponents(true, hasBasic) });
+      await old.edit({ components: buildIntroPanelComponents(true) });
     } catch { /* already gone */ }
   }
 
   const sent = await (channel as TextChannel).send({
     embeds: [buildIntroPanelEmbed()],
-    components: buildIntroPanelComponents(false, hasBasic),
+    components: buildIntroPanelComponents(),
   });
 
   await context.repo.upsertGuildSetting({ guildId, panelMessageId: sent.id });
