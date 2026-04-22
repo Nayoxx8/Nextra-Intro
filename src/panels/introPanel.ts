@@ -3,6 +3,8 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "disc
 export const CREATE_INTRO_BUTTON_ID = "nextra-intro:user:create";
 export const EDIT_INTRO_BUTTON_ID = "nextra-intro:user:edit";
 export const BASIC_INTRO_BUTTON_ID = "nextra-intro:user:basic";
+export const SELECT_BASIC_BUTTON_ID = "nextra-intro:user:select:basic";
+export const SELECT_CUSTOM_BUTTON_ID = "nextra-intro:user:select:custom";
 
 export function buildIntroPanelEmbed(): EmbedBuilder {
   return new EmbedBuilder()
@@ -33,4 +35,18 @@ export function buildIntroPanelComponents(disabled = false): ActionRowBuilder<Bu
     .setDisabled(disabled);
 
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(createBtn, editBtn, basicBtn)];
+}
+
+export function buildSelectComponents(): ActionRowBuilder<ButtonBuilder>[] {
+  const basicBtn = new ButtonBuilder()
+    .setCustomId(SELECT_BASIC_BUTTON_ID)
+    .setLabel("基礎質問")
+    .setStyle(ButtonStyle.Success);
+
+  const customBtn = new ButtonBuilder()
+    .setCustomId(SELECT_CUSTOM_BUTTON_ID)
+    .setLabel("追加質問")
+    .setStyle(ButtonStyle.Primary);
+
+  return [new ActionRowBuilder<ButtonBuilder>().addComponents(basicBtn, customBtn)];
 }

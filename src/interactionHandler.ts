@@ -23,7 +23,10 @@ import {
   CREATE_INTRO_BUTTON_ID,
   EDIT_INTRO_BUTTON_ID,
   BASIC_INTRO_BUTTON_ID,
+  SELECT_BASIC_BUTTON_ID,
+  SELECT_CUSTOM_BUTTON_ID,
   buildIntroPanelComponents,
+  buildSelectComponents,
 } from "./panels/introPanel.js";
 import { INTRO_MODAL_ID, BASIC_MODAL_ID, buildIntroModal, buildBasicModal } from "./modals/introModal.js";
 import { handleIntroSubmit, handleBasicSubmit } from "./services/introService.js";
@@ -101,11 +104,34 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           return;
         }
 
-        // Intro panel: create / edit
+        // Intro panel: create / edit → show selection
         if (customId === CREATE_INTRO_BUTTON_ID || customId === EDIT_INTRO_BUTTON_ID) {
+          await interaction.reply({
+            content: "どちらに回答しますか？",
+            components: buildSelectComponents(),
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // Selection: basic
+        if (customId === SELECT_BASIC_BUTTON_ID) {
+          const basic = await context.repo.getBasicSetting(guildId);
+          const anyEnabled = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
+          if (!anyEnabled) {
+            await interaction.reply({ content: "基礎質問は現在すべてオフです。", flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
+          await interaction.showModal(buildBasicModal(basic, existing ?? {}));
+          return;
+        }
+
+        // Selection: custom questions
+        if (customId === SELECT_CUSTOM_BUTTON_ID) {
           const questions = await context.repo.getQuestions(guildId);
           if (questions.length === 0) {
-            await interaction.reply({ content: "管理者が質問をまだ設定していません。", flags: MessageFlags.Ephemeral });
+            await interaction.reply({ content: "管理者が追加質問をまだ設定していません。", flags: MessageFlags.Ephemeral });
             return;
           }
           const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
@@ -113,7 +139,7 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           return;
         }
 
-        // Intro panel: basic questions
+        // Intro panel: basic questions (direct shortcut)
         if (customId === BASIC_INTRO_BUTTON_ID) {
           const basic = await context.repo.getBasicSetting(guildId);
           const anyEnabled = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
