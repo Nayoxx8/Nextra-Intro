@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model GuildSetting {
+  guildId          String  @id @map("guild_id")
+  displayChannelId String? @map("display_channel_id")
+  panelMessageId   String? @map("panel_message_id")
+
+  @@map("guild_settings")
+}
+
+model GuildQuestion {
+  guildId    String  @map("guild_id")
+  orderIndex Int     @map("order_index")
+  label      String
+  required   Boolean @default(false)
+
+  @@id([guildId, orderIndex])
+  @@map("guild_questions")
+}
+
+model UserIntro {
+  guildId   String  @map("guild_id")
+  userId    String  @map("user_id")
+  answers   Json    @default("{}")
+  messageId String? @map("message_id")
+
+  @@id([guildId, userId])
+  @@map("user_intros")
+}
