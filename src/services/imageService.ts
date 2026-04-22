@@ -36,18 +36,18 @@ function getActiveBasicFields(
   fields: BasicFields
 ): { label: string; value: string }[] {
   const result: { label: string; value: string }[] = [];
-  if (basic.nameEnabled) result.push({ label: "名前", value: fields.name ?? "" });
-  if (basic.ageEnabled) result.push({ label: "年齢", value: fields.age ?? "" });
-  if (basic.genderEnabled) result.push({ label: "性別", value: fields.gender ?? "" });
+  if (basic.nameEnabled && fields.name) result.push({ label: "名前", value: fields.name });
+  if (basic.ageEnabled && fields.age) result.push({ label: "年齢", value: fields.age });
+  if (basic.genderEnabled && fields.gender) result.push({ label: "性別", value: fields.gender });
   return result;
 }
 
 function computeHeight(
   basicCount: number,
-  questionCount: number
+  answeredQuestionCount: number
 ): number {
   const basicSection = basicCount > 0 ? basicCount * BASIC_ROW_HEIGHT + 16 : 0;
-  return Math.max(340, DIVIDER_Y + basicSection + questionCount * ROW_HEIGHT + FOOTER_HEIGHT + 32);
+  return Math.max(300, DIVIDER_Y + basicSection + answeredQuestionCount * ROW_HEIGHT + FOOTER_HEIGHT + 32);
 }
 
 function drawRoundedRect(
@@ -103,7 +103,8 @@ export async function generateIntroCard(params: {
 
   const { avatarUrl, username, basic, basicFields, questions, answers } = params;
   const activeBasic = getActiveBasicFields(basic, basicFields);
-  const height = computeHeight(activeBasic.length, questions.length);
+  const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
+  const height = computeHeight(activeBasic.length, answeredQuestions.length);
   const canvas = createCanvas(CARD_WIDTH, height);
   const ctx = canvas.getContext("2d");
   const maxTextWidth = CARD_WIDTH - PADDING * 2;
@@ -190,9 +191,10 @@ export async function generateIntroCard(params: {
     }
   }
 
-  // ── Custom Q&A rows ──────────────────────────────────────────────────────
-  for (const q of questions) {
-    const answerText = answers[String(q.orderIndex)] ?? "";
+  // ── Custom Q&A rows (answered only) ─────────────────────────────────────
+  for (let i = 0; i < answeredQuestions.length; i++) {
+    const q = answeredQuestions[i];
+    const answerText = answers[String(q.orderIndex)];
 
     ctx.font = "bold 13px NotoSansJP";
     ctx.fillStyle = "#a0a0c0";
@@ -200,8 +202,8 @@ export async function generateIntroCard(params: {
     ctx.fillText(q.label, PADDING, currentY, maxTextWidth);
 
     ctx.font = "16px NotoSansJP";
-    ctx.fillStyle = answerText ? "#ffffff" : "#606080";
-    const lines = wrapText(ctx, answerText || "（未入力）", maxTextWidth);
+    ctx.fillStyle = "#ffffff";
+    const lines = wrapText(ctx, answerText, maxTextWidth);
     let lineY = currentY + 24;
     for (const line of lines.slice(0, 2)) {
       ctx.fillText(line, PADDING, lineY, maxTextWidth);
@@ -210,7 +212,7 @@ export async function generateIntroCard(params: {
 
     currentY += ROW_HEIGHT;
 
-    if (q.orderIndex < questions.length - 1) {
+    if (i < answeredQuestions.length - 1) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
       ctx.beginPath();
