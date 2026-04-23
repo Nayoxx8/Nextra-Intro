@@ -9,6 +9,7 @@ import {
 import type { BotContext, GuildQuestionRecord } from "../types.js";
 import { generateIntroCard } from "./imageService.js";
 import { buildIntroPanelComponents } from "../panels/introPanel.js";
+import { EDIT_INPUT_ID } from "../modals/introModal.js";
 
 const inFlightUsers = new Set<string>();
 
@@ -83,7 +84,6 @@ export async function handleIntroSubmit(
   const { guildId, user } = interaction;
   if (!guildId) return;
 
-  // Collect answers
   const answers: Record<string, string> = {};
   for (const q of questions) {
     try {
@@ -92,7 +92,6 @@ export async function handleIntroSubmit(
     } catch { /* optional field */ }
   }
 
-  // Validate required fields
   for (const q of questions) {
     if (q.required && !answers[String(q.orderIndex)]) {
       await interaction.reply({ content: `「${q.label}」は必須項目です。`, flags: MessageFlags.Ephemeral });
@@ -176,6 +175,75 @@ export async function handleBasicSubmit(
       answers: existing?.answers ?? {},
     }),
     { basicName, basicAge, basicGender }
+  );
+}
+
+export async function handleSingleFieldEdit(
+  interaction: ModalSubmitInteraction,
+  context: BotContext
+): Promise<void> {
+  const { guildId, user } = interaction;
+  if (!guildId) return;
+
+  // customId: nextra-intro:edit:basic:name|age|gender  or  nextra-intro:edit:custom:0
+  const parts = interaction.customId.split(":");
+  const editType = parts[2] as "basic" | "custom";
+  const fieldOrIndex = parts[3];
+
+  const newValue = getField(interaction, EDIT_INPUT_ID);
+
+  const [basic, questions, existing] = await Promise.all([
+    context.repo.getBasicSetting(guildId),
+    context.repo.getQuestions(guildId),
+    context.repo.getUserIntro(guildId, user.id),
+  ]);
+
+  // Build merged data for image generation
+  const mergedBasic = {
+    name: existing?.basicName ?? null,
+    age: existing?.basicAge ?? null,
+    gender: existing?.basicGender ?? null,
+  };
+  const mergedAnswers: Record<string, string> = { ...(existing?.answers ?? {}) };
+
+  let saveData: Parameters<BotContext["repo"]["saveUserIntro"]>[2];
+
+  if (editType === "basic") {
+    const field = fieldOrIndex as "name" | "age" | "gender";
+    mergedBasic[field] = newValue;
+    saveData = {
+      basicName: field === "name" ? newValue : undefined,
+      basicAge: field === "age" ? newValue : undefined,
+      basicGender: field === "gender" ? newValue : undefined,
+    };
+  } else {
+    const orderIndex = parseInt(fieldOrIndex, 10);
+    if (newValue) {
+      mergedAnswers[String(orderIndex)] = newValue;
+    } else {
+      delete mergedAnswers[String(orderIndex)];
+    }
+    saveData = { answers: mergedAnswers };
+  }
+
+  const displayName =
+    interaction.member instanceof GuildMember
+      ? interaction.member.displayName
+      : user.displayName;
+
+  await postOrEditImage(
+    interaction,
+    context,
+    guildId,
+    () => generateIntroCard({
+      avatarUrl: user.displayAvatarURL({ extension: "png", size: 128 }),
+      username: displayName,
+      basic,
+      basicFields: mergedBasic,
+      questions,
+      answers: mergedAnswers,
+    }),
+    saveData
   );
 }
 

@@ -25,11 +25,20 @@ import {
   BASIC_INTRO_BUTTON_ID,
   SELECT_BASIC_BUTTON_ID,
   SELECT_CUSTOM_BUTTON_ID,
+  EDIT_SELECT_MENU_ID,
   buildIntroPanelComponents,
   buildSelectComponents,
+  buildEditSelectMenu,
 } from "./panels/introPanel.js";
-import { INTRO_MODAL_ID, BASIC_MODAL_ID, buildIntroModal, buildBasicModal } from "./modals/introModal.js";
-import { handleIntroSubmit, handleBasicSubmit } from "./services/introService.js";
+import {
+  INTRO_MODAL_ID,
+  BASIC_MODAL_ID,
+  buildIntroModal,
+  buildBasicModal,
+  buildSingleBasicModal,
+  buildSingleCustomModal,
+} from "./modals/introModal.js";
+import { handleIntroSubmit, handleBasicSubmit, handleSingleFieldEdit } from "./services/introService.js";
 
 export function registerInteractionHandler(client: Client, context: BotContext): void {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -104,11 +113,53 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           return;
         }
 
-        // Intro panel: create / edit → show selection
-        if (customId === CREATE_INTRO_BUTTON_ID || customId === EDIT_INTRO_BUTTON_ID) {
+        // Intro panel: create → smart routing
+        if (customId === CREATE_INTRO_BUTTON_ID) {
+          const [basic, questions] = await Promise.all([
+            context.repo.getBasicSetting(guildId),
+            context.repo.getQuestions(guildId),
+          ]);
+          const anyBasic = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
+          const anyCustom = questions.length > 0;
+
+          if (!anyBasic && !anyCustom) {
+            await interaction.reply({ content: "サーバーに自己紹介の質問が設定されていません。", flags: MessageFlags.Ephemeral });
+            return;
+          }
+
+          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
+
+          if (anyBasic && !anyCustom) {
+            await interaction.showModal(buildBasicModal(basic, existing ?? {}));
+            return;
+          }
+          if (!anyBasic && anyCustom) {
+            await interaction.showModal(buildIntroModal(questions, existing?.answers ?? {}));
+            return;
+          }
+          // Both exist → show selection
           await interaction.reply({
             content: "どちらに回答しますか？",
             components: buildSelectComponents(),
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // Intro panel: edit → show select menu of all configured fields
+        if (customId === EDIT_INTRO_BUTTON_ID) {
+          const [basic, questions] = await Promise.all([
+            context.repo.getBasicSetting(guildId),
+            context.repo.getQuestions(guildId),
+          ]);
+          const editComponents = buildEditSelectMenu(basic, questions);
+          if (editComponents.length === 0) {
+            await interaction.reply({ content: "サーバーに自己紹介の質問が設定されていません。", flags: MessageFlags.Ephemeral });
+            return;
+          }
+          await interaction.reply({
+            content: "編集する項目を選んでください。",
+            components: editComponents,
             flags: MessageFlags.Ephemeral,
           });
           return;
@@ -149,6 +200,36 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           }
           const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
           await interaction.showModal(buildBasicModal(basic, existing ?? {}));
+          return;
+        }
+
+        return;
+      }
+
+      // ── Select menus ─────────────────────────────────────────────────────
+      if (interaction.isStringSelectMenu()) {
+        const { customId } = interaction;
+
+        if (customId === EDIT_SELECT_MENU_ID) {
+          const value = interaction.values[0]; // "basic:name" | "basic:age" | "basic:gender" | "custom:0"
+          const colonIdx = value.indexOf(":");
+          const editType = value.slice(0, colonIdx);
+          const fieldOrIndex = value.slice(colonIdx + 1);
+
+          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
+
+          if (editType === "basic") {
+            const field = fieldOrIndex as "name" | "age" | "gender";
+            const current = field === "name" ? existing?.basicName : field === "age" ? existing?.basicAge : existing?.basicGender;
+            await interaction.showModal(buildSingleBasicModal(field, current));
+          } else {
+            const orderIndex = parseInt(fieldOrIndex, 10);
+            const questions = await context.repo.getQuestions(guildId);
+            const q = questions.find((q) => q.orderIndex === orderIndex);
+            if (!q) return;
+            const currentAnswer = (existing?.answers ?? {})[String(orderIndex)];
+            await interaction.showModal(buildSingleCustomModal(q, currentAnswer));
+          }
           return;
         }
 
@@ -212,6 +293,12 @@ export function registerInteractionHandler(client: Client, context: BotContext):
 
         if (customId === BASIC_MODAL_ID) {
           await handleBasicSubmit(interaction, context);
+          return;
+        }
+
+        // Single-field edit modals
+        if (customId.startsWith("nextra-intro:edit:")) {
+          await handleSingleFieldEdit(interaction, context);
           return;
         }
 

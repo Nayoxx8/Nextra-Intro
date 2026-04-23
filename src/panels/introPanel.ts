@@ -1,10 +1,19 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+} from "discord.js";
+import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
 
 export const CREATE_INTRO_BUTTON_ID = "nextra-intro:user:create";
 export const EDIT_INTRO_BUTTON_ID = "nextra-intro:user:edit";
 export const BASIC_INTRO_BUTTON_ID = "nextra-intro:user:basic";
 export const SELECT_BASIC_BUTTON_ID = "nextra-intro:user:select:basic";
 export const SELECT_CUSTOM_BUTTON_ID = "nextra-intro:user:select:custom";
+export const EDIT_SELECT_MENU_ID = "nextra-intro:user:edit:select";
 
 export function buildIntroPanelEmbed(): EmbedBuilder {
   return new EmbedBuilder()
@@ -49,4 +58,39 @@ export function buildSelectComponents(): ActionRowBuilder<ButtonBuilder>[] {
     .setStyle(ButtonStyle.Primary);
 
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(basicBtn, customBtn)];
+}
+
+export function buildEditSelectMenu(
+  basic: GuildBasicSettingRecord,
+  questions: GuildQuestionRecord[]
+): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const options: StringSelectMenuOptionBuilder[] = [];
+
+  if (basic.nameEnabled) {
+    options.push(new StringSelectMenuOptionBuilder().setLabel("名前").setValue("basic:name"));
+  }
+  if (basic.ageEnabled) {
+    options.push(new StringSelectMenuOptionBuilder().setLabel("年齢").setValue("basic:age"));
+  }
+  if (basic.genderEnabled) {
+    options.push(new StringSelectMenuOptionBuilder().setLabel("性別").setValue("basic:gender"));
+  }
+  for (const q of questions) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setLabel(q.label.slice(0, 100))
+        .setValue(`custom:${q.orderIndex}`)
+    );
+  }
+
+  if (options.length === 0) return [];
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(EDIT_SELECT_MENU_ID)
+    .setPlaceholder("編集する項目を選んでください")
+    .addOptions(options)
+    .setMinValues(1)
+    .setMaxValues(1);
+
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
 }

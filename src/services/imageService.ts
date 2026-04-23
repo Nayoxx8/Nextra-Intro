@@ -12,6 +12,7 @@ function ensureFonts(): void {
   if (fontsRegistered) return;
   GlobalFonts.registerFromPath(join(FONTS_DIR, "NotoSansJP-Regular.otf"), "NotoSansJP");
   GlobalFonts.registerFromPath(join(FONTS_DIR, "NotoSansJP-Bold.otf"), "NotoSansJP");
+  GlobalFonts.registerFromPath(join(FONTS_DIR, "NotoEmoji-Regular.ttf"), "NotoEmoji");
   fontsRegistered = true;
 }
 
@@ -19,15 +20,15 @@ const CARD_WIDTH = 800;
 const PADDING = 40;
 const AVATAR_RADIUS = 48;
 const HEADER_TOP = 32;
-// Avatar center
-const AVATAR_CX = PADDING + AVATAR_RADIUS;       // 88
-const AVATAR_CY = HEADER_TOP + AVATAR_RADIUS;    // 80
-// Right content starts after avatar + gap
+const AVATAR_CX = PADDING + AVATAR_RADIUS;        // 88
+const AVATAR_CY = HEADER_TOP + AVATAR_RADIUS;     // 80
 const RIGHT_X = PADDING + AVATAR_RADIUS * 2 + 20; // 156
 const RIGHT_MAX_W = CARD_WIDTH - PADDING - RIGHT_X; // 604
-const USERNAME_Y = HEADER_TOP + 26;               // 58  (baseline)
-const BASIC_LABEL_OFFSET = 14;                    // gap after username
-const BASIC_FIELD_HEIGHT = 30;                    // per field row
+const USERNAME_Y = HEADER_TOP + 26;               // 58
+const BASIC_LABEL_Y = USERNAME_Y + 18;            // 76
+const BASIC_VALUE_Y = BASIC_LABEL_Y + 18;         // 94
+const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
+const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 16) + 24; // 152
 const ROW_HEIGHT = 72;
 const FOOTER_HEIGHT = 48;
 
@@ -48,16 +49,8 @@ function getActiveBasicFields(
   return result;
 }
 
-function computeDividerY(basicCount: number): number {
-  const avatarBottom = HEADER_TOP + AVATAR_RADIUS * 2; // 128
-  const textBottom =
-    USERNAME_Y + BASIC_LABEL_OFFSET + basicCount * BASIC_FIELD_HEIGHT;
-  return Math.max(avatarBottom, textBottom) + 24;
-}
-
-function computeHeight(basicCount: number, answeredQuestionCount: number): number {
-  const dividerY = computeDividerY(basicCount);
-  return Math.max(280, dividerY + 16 + answeredQuestionCount * ROW_HEIGHT + FOOTER_HEIGHT);
+function computeHeight(answeredQuestionCount: number): number {
+  return Math.max(280, DIVIDER_Y + 16 + answeredQuestionCount * ROW_HEIGHT + FOOTER_HEIGHT);
 }
 
 function drawRoundedRect(
@@ -110,8 +103,7 @@ export async function generateIntroCard(params: {
   const { avatarUrl, username, basic, basicFields, questions, answers } = params;
   const activeBasic = getActiveBasicFields(basic, basicFields);
   const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
-  const dividerY = computeDividerY(activeBasic.length);
-  const height = computeHeight(activeBasic.length, answeredQuestions.length);
+  const height = computeHeight(answeredQuestions.length);
 
   const canvas = createCanvas(CARD_WIDTH, height);
   const ctx = canvas.getContext("2d");
@@ -155,39 +147,40 @@ export async function generateIntroCard(params: {
     ctx.fill();
   }
 
-  // ── Right side: username + basic fields ──────────────────────────────────
+  // ── Right side: username ─────────────────────────────────────────────────
   ctx.textAlign = "left";
-
-  // Username
-  ctx.font = "bold 20px NotoSansJP";
+  ctx.font = "bold 20px NotoSansJP, NotoEmoji";
   ctx.fillStyle = "#ffffff";
   ctx.fillText(username, RIGHT_X, USERNAME_Y, RIGHT_MAX_W);
 
-  // Basic fields
-  let basicY = USERNAME_Y + BASIC_LABEL_OFFSET;
-  for (const { label, value } of activeBasic) {
-    ctx.font = "bold 12px NotoSansJP";
-    ctx.fillStyle = "#a0a0c0";
-    ctx.fillText(label, RIGHT_X, basicY);
+  // ── Basic fields (horizontal columns) ────────────────────────────────────
+  if (activeBasic.length > 0) {
+    const colWidth = Math.floor(RIGHT_MAX_W / activeBasic.length);
+    for (let i = 0; i < activeBasic.length; i++) {
+      const { label, value } = activeBasic[i];
+      const colX = RIGHT_X + i * colWidth;
 
-    ctx.font = "15px NotoSansJP";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(value, RIGHT_X + 36, basicY, RIGHT_MAX_W - 36);
+      ctx.font = "bold 11px NotoSansJP";
+      ctx.fillStyle = "#a0a0c0";
+      ctx.fillText(label, colX, BASIC_LABEL_Y, colWidth - 8);
 
-    basicY += BASIC_FIELD_HEIGHT;
+      ctx.font = "14px NotoSansJP, NotoEmoji";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(value, colX, BASIC_VALUE_Y, colWidth - 8);
+    }
   }
 
   // ── Divider ──────────────────────────────────────────────────────────────
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(PADDING, dividerY);
-  ctx.lineTo(CARD_WIDTH - PADDING, dividerY);
+  ctx.moveTo(PADDING, DIVIDER_Y);
+  ctx.lineTo(CARD_WIDTH - PADDING, DIVIDER_Y);
   ctx.stroke();
 
   // ── Custom Q&A rows ──────────────────────────────────────────────────────
   const maxTextWidth = CARD_WIDTH - PADDING * 2;
-  let currentY = dividerY + 24;
+  let currentY = DIVIDER_Y + 24;
 
   for (let i = 0; i < answeredQuestions.length; i++) {
     const q = answeredQuestions[i];
@@ -197,7 +190,7 @@ export async function generateIntroCard(params: {
     ctx.fillStyle = "#a0a0c0";
     ctx.fillText(q.label, PADDING, currentY, maxTextWidth);
 
-    ctx.font = "16px NotoSansJP";
+    ctx.font = "16px NotoSansJP, NotoEmoji";
     ctx.fillStyle = "#ffffff";
     const lines = wrapText(ctx, answerText, maxTextWidth);
     let lineY = currentY + 22;

@@ -8,6 +8,7 @@ import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
 
 export const INTRO_MODAL_ID = "nextra-intro:user:modal";
 export const BASIC_MODAL_ID = "nextra-intro:user:basic:modal";
+export const EDIT_INPUT_ID = "nextra-intro:edit:input";
 
 export function buildIntroModal(
   questions: GuildQuestionRecord[],
@@ -71,5 +72,50 @@ export function buildBasicModal(
     modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
   }
 
+  return modal;
+}
+
+export function buildSingleBasicModal(
+  field: "name" | "age" | "gender",
+  currentValue: string | null | undefined
+): ModalBuilder {
+  const labels = { name: "名前", age: "年齢", gender: "性別" } as const;
+  const maxLengths = { name: 50, age: 10, gender: 20 } as const;
+
+  const modal = new ModalBuilder()
+    .setCustomId(`nextra-intro:edit:basic:${field}`)
+    .setTitle(`${labels[field]}を編集`);
+
+  const input = new TextInputBuilder()
+    .setCustomId(EDIT_INPUT_ID)
+    .setLabel(labels[field])
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(maxLengths[field])
+    .setRequired(false);
+  if (currentValue) input.setValue(currentValue);
+
+  modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+  return modal;
+}
+
+export function buildSingleCustomModal(
+  q: GuildQuestionRecord,
+  currentAnswer: string | null | undefined
+): ModalBuilder {
+  const title = `${q.label}を編集`.slice(0, 45);
+
+  const modal = new ModalBuilder()
+    .setCustomId(`nextra-intro:edit:custom:${q.orderIndex}`)
+    .setTitle(title);
+
+  const input = new TextInputBuilder()
+    .setCustomId(EDIT_INPUT_ID)
+    .setLabel(q.label.slice(0, 45))
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(100)
+    .setRequired(false);
+  if (currentAnswer) input.setValue(currentAnswer);
+
+  modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
   return modal;
 }
