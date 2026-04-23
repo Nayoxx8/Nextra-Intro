@@ -1,6 +1,7 @@
 import { Events, type Client, type Guild } from "discord.js";
 import { introSetupCommand } from "./commands/introSetup.js";
 import { introPanelCommand } from "./commands/introPanel.js";
+import type { IntroRepository } from "./repositories/introRepository.js";
 
 const MAX_ATTEMPTS = 3;
 const commandPayload = [introSetupCommand.toJSON(), introPanelCommand.toJSON()] as const;
@@ -26,14 +27,21 @@ async function registerForGuild(guild: RegisterableGuild): Promise<void> {
   }
 }
 
-export function registerCommandsOnReady(client: Client): void {
+export function registerCommandsOnReady(client: Client, repo: IntroRepository): void {
   client.on(Events.ClientReady, async (ready) => {
     const guilds = [...ready.guilds.cache.values()];
-    await Promise.all(guilds.map(registerForGuild));
+    await Promise.all(
+      guilds.map(async (g) => {
+        await registerForGuild(g);
+        await repo.preloadForGuild(g.id);
+      })
+    );
+    console.log(`[cache] preloaded ${guilds.length} guild(s)`);
     console.log(`Logged in as ${ready.user.tag}`);
   });
 
   client.on(Events.GuildCreate, async (guild) => {
     await registerForGuild(guild);
+    await repo.preloadForGuild(guild.id);
   });
 }

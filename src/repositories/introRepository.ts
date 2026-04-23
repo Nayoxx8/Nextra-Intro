@@ -1,7 +1,7 @@
 import prisma from "../lib/prisma.js";
 import type { GuildSettingRecord, GuildBasicSettingRecord, GuildQuestionRecord, UserIntroRecord } from "../types.js";
 
-const CACHE_TTL = 60_000; // 60 seconds
+const CACHE_TTL = 600_000; // 10 minutes
 
 type CacheEntry<T> = { value: T; expiresAt: number };
 
@@ -118,6 +118,18 @@ export class IntroRepository {
       where: { guildId_orderIndex: { guildId, orderIndex: last.orderIndex } },
     });
     this.questionsCache.delete(guildId);
+  }
+
+  async preloadForGuild(guildId: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.getGuildSetting(guildId),
+        this.getBasicSetting(guildId),
+        this.getQuestions(guildId),
+      ]);
+    } catch (err) {
+      console.warn(`[cache] preload failed guild=${guildId}:`, err);
+    }
   }
 
   // ── User intros ──────────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ const context: BotContext = {
   repo: new IntroRepository(),
 };
 
-registerCommandsOnReady(client);
+registerCommandsOnReady(client, context.repo);
 registerInteractionHandler(client, context);
 
 client.login(env.DISCORD_TOKEN);
