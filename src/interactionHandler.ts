@@ -115,9 +115,11 @@ export function registerInteractionHandler(client: Client, context: BotContext):
 
         // Intro panel: create → smart routing
         if (customId === CREATE_INTRO_BUTTON_ID) {
-          const [basic, questions] = await Promise.all([
+          // Fetch all 3 in parallel to stay within 3s interaction window
+          const [basic, questions, existing] = await Promise.all([
             context.repo.getBasicSetting(guildId),
             context.repo.getQuestions(guildId),
+            context.repo.getUserIntro(guildId, interaction.user.id),
           ]);
           const anyBasic = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
           const anyCustom = questions.length > 0;
@@ -126,9 +128,6 @@ export function registerInteractionHandler(client: Client, context: BotContext):
             await interaction.reply({ content: "サーバーに自己紹介の質問が設定されていません。", flags: MessageFlags.Ephemeral });
             return;
           }
-
-          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
-
           if (anyBasic && !anyCustom) {
             await interaction.showModal(buildBasicModal(basic, existing ?? {}));
             return;
@@ -137,7 +136,6 @@ export function registerInteractionHandler(client: Client, context: BotContext):
             await interaction.showModal(buildIntroModal(questions, existing?.answers ?? {}));
             return;
           }
-          // Both exist → show selection
           await interaction.reply({
             content: "どちらに回答しますか？",
             components: buildSelectComponents(),
@@ -165,40 +163,49 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           return;
         }
 
-        // Selection: basic
+        // Selection: basic (shown when both basic + custom exist after CREATE)
         if (customId === SELECT_BASIC_BUTTON_ID) {
-          const basic = await context.repo.getBasicSetting(guildId);
+          // Fetch both in parallel to stay within 3s window
+          const [basic, existing] = await Promise.all([
+            context.repo.getBasicSetting(guildId),
+            context.repo.getUserIntro(guildId, interaction.user.id),
+          ]);
           const anyEnabled = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
           if (!anyEnabled) {
             await interaction.reply({ content: "基礎質問は現在すべてオフです。", flags: MessageFlags.Ephemeral });
             return;
           }
-          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
           await interaction.showModal(buildBasicModal(basic, existing ?? {}));
           return;
         }
 
         // Selection: custom questions
         if (customId === SELECT_CUSTOM_BUTTON_ID) {
-          const questions = await context.repo.getQuestions(guildId);
+          // Fetch both in parallel to stay within 3s window
+          const [questions, existing] = await Promise.all([
+            context.repo.getQuestions(guildId),
+            context.repo.getUserIntro(guildId, interaction.user.id),
+          ]);
           if (questions.length === 0) {
             await interaction.reply({ content: "管理者が追加質問をまだ設定していません。", flags: MessageFlags.Ephemeral });
             return;
           }
-          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
           await interaction.showModal(buildIntroModal(questions, existing?.answers ?? {}));
           return;
         }
 
         // Intro panel: basic questions (direct shortcut)
         if (customId === BASIC_INTRO_BUTTON_ID) {
-          const basic = await context.repo.getBasicSetting(guildId);
+          // Fetch both in parallel to stay within 3s window
+          const [basic, existing] = await Promise.all([
+            context.repo.getBasicSetting(guildId),
+            context.repo.getUserIntro(guildId, interaction.user.id),
+          ]);
           const anyEnabled = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
           if (!anyEnabled) {
             await interaction.reply({ content: "基礎質問は現在すべてオフです。", flags: MessageFlags.Ephemeral });
             return;
           }
-          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
           await interaction.showModal(buildBasicModal(basic, existing ?? {}));
           return;
         }
@@ -216,15 +223,21 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           const editType = value.slice(0, colonIdx);
           const fieldOrIndex = value.slice(colonIdx + 1);
 
-          const existing = await context.repo.getUserIntro(guildId, interaction.user.id);
+          // Fetch both in parallel to stay within 3s interaction window
+          const [existing, questions] = await Promise.all([
+            context.repo.getUserIntro(guildId, interaction.user.id),
+            context.repo.getQuestions(guildId),
+          ]);
 
           if (editType === "basic") {
             const field = fieldOrIndex as "name" | "age" | "gender";
-            const current = field === "name" ? existing?.basicName : field === "age" ? existing?.basicAge : existing?.basicGender;
+            const current =
+              field === "name" ? existing?.basicName
+              : field === "age" ? existing?.basicAge
+              : existing?.basicGender;
             await interaction.showModal(buildSingleBasicModal(field, current));
           } else {
             const orderIndex = parseInt(fieldOrIndex, 10);
-            const questions = await context.repo.getQuestions(guildId);
             const q = questions.find((q) => q.orderIndex === orderIndex);
             if (!q) return;
             const currentAnswer = (existing?.answers ?? {})[String(orderIndex)];
@@ -307,7 +320,7 @@ export function registerInteractionHandler(client: Client, context: BotContext):
     } catch (err) {
       console.error("[interactionHandler] unhandled error:", err);
       try {
-        const errMsg = { content: "エラーが発生しました。しばらくしてから再試行してください。", ephemeral: true };
+        const errMsg = { content: "エラーが発生しました。しばらくしてから再試行してください。", flags: MessageFlags.Ephemeral } as const;
         if (interaction.isRepliable()) {
           if (interaction.deferred || interaction.replied) {
             await interaction.followUp(errMsg);
