@@ -1,17 +1,34 @@
 import prisma from "../lib/prisma.js";
 import type { GuildSettingRecord, GuildBasicSettingRecord, GuildQuestionRecord, UserIntroRecord } from "../types.js";
 
+const CACHE_TTL = 60_000; // 60 seconds
+
+type CacheEntry<T> = { value: T; expiresAt: number };
+
+function fresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
+  return !!entry && entry.expiresAt > Date.now();
+}
+
+function entry<T>(value: T): CacheEntry<T> {
+  return { value, expiresAt: Date.now() + CACHE_TTL };
+}
+
 export class IntroRepository {
+  private settingCache = new Map<string, CacheEntry<GuildSettingRecord | null>>();
+  private basicCache = new Map<string, CacheEntry<GuildBasicSettingRecord>>();
+  private questionsCache = new Map<string, CacheEntry<GuildQuestionRecord[]>>();
+
   // ── Guild settings ───────────────────────────────────────────────────────
 
   async getGuildSetting(guildId: string): Promise<GuildSettingRecord | null> {
+    const cached = this.settingCache.get(guildId);
+    if (fresh(cached)) return cached.value;
     const row = await prisma.guildSetting.findUnique({ where: { guildId } });
-    if (!row) return null;
-    return {
-      guildId: row.guildId,
-      displayChannelId: row.displayChannelId,
-      panelMessageId: row.panelMessageId,
-    };
+    const value = row
+      ? { guildId: row.guildId, displayChannelId: row.displayChannelId, panelMessageId: row.panelMessageId }
+      : null;
+    this.settingCache.set(guildId, entry(value));
+    return value;
   }
 
   async upsertGuildSetting(record: Partial<GuildSettingRecord> & { guildId: string }): Promise<void> {
@@ -27,18 +44,23 @@ export class IntroRepository {
         ...(record.panelMessageId !== undefined && { panelMessageId: record.panelMessageId }),
       },
     });
+    this.settingCache.delete(record.guildId);
   }
 
   // ── Basic settings ───────────────────────────────────────────────────────
 
   async getBasicSetting(guildId: string): Promise<GuildBasicSettingRecord> {
+    const cached = this.basicCache.get(guildId);
+    if (fresh(cached)) return cached.value;
     const row = await prisma.guildBasicSetting.findUnique({ where: { guildId } });
-    return {
+    const value: GuildBasicSettingRecord = {
       guildId,
       nameEnabled: row?.nameEnabled ?? true,
       ageEnabled: row?.ageEnabled ?? true,
       genderEnabled: row?.genderEnabled ?? true,
     };
+    this.basicCache.set(guildId, entry(value));
+    return value;
   }
 
   async toggleBasicField(
@@ -49,34 +71,34 @@ export class IntroRepository {
     const updated = { ...current, [field]: !current[field] };
     await prisma.guildBasicSetting.upsert({
       where: { guildId },
-      create: {
-        guildId,
-        nameEnabled: updated.nameEnabled,
-        ageEnabled: updated.ageEnabled,
-        genderEnabled: updated.genderEnabled,
-      },
+      create: { guildId, nameEnabled: updated.nameEnabled, ageEnabled: updated.ageEnabled, genderEnabled: updated.genderEnabled },
       update: { [field]: updated[field] },
     });
+    this.basicCache.set(guildId, entry(updated));
     return updated;
   }
 
   // ── Questions ────────────────────────────────────────────────────────────
 
   async getQuestions(guildId: string): Promise<GuildQuestionRecord[]> {
+    const cached = this.questionsCache.get(guildId);
+    if (fresh(cached)) return cached.value;
     const rows = await prisma.guildQuestion.findMany({
       where: { guildId },
       orderBy: { orderIndex: "asc" },
     });
-    return rows.map((r) => ({
+    const value = rows.map((r) => ({
       guildId: r.guildId,
       orderIndex: r.orderIndex,
       label: r.label,
       required: r.required,
     }));
+    this.questionsCache.set(guildId, entry(value));
+    return value;
   }
 
   async countQuestions(guildId: string): Promise<number> {
-    return prisma.guildQuestion.count({ where: { guildId } });
+    return (await this.getQuestions(guildId)).length;
   }
 
   async addQuestion(guildId: string, label: string, required: boolean): Promise<void> {
@@ -85,6 +107,7 @@ export class IntroRepository {
     await prisma.guildQuestion.create({
       data: { guildId, orderIndex: count, label, required },
     });
+    this.questionsCache.delete(guildId);
   }
 
   async deleteLastQuestion(guildId: string): Promise<void> {
@@ -94,6 +117,7 @@ export class IntroRepository {
     await prisma.guildQuestion.delete({
       where: { guildId_orderIndex: { guildId, orderIndex: last.orderIndex } },
     });
+    this.questionsCache.delete(guildId);
   }
 
   // ── User intros ──────────────────────────────────────────────────────────
