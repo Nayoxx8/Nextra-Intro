@@ -115,11 +115,10 @@ export function registerInteractionHandler(client: Client, context: BotContext):
 
         // Intro panel: create → smart routing
         if (customId === CREATE_INTRO_BUTTON_ID) {
-          // Fetch all 3 in parallel to stay within 3s interaction window
-          const [basic, questions, existing] = await Promise.all([
+          // 2 parallel queries only; showModal cannot follow deferReply
+          const [basic, questions] = await Promise.all([
             context.repo.getBasicSetting(guildId),
             context.repo.getQuestions(guildId),
-            context.repo.getUserIntro(guildId, interaction.user.id),
           ]);
           const anyBasic = basic.nameEnabled || basic.ageEnabled || basic.genderEnabled;
           const anyCustom = questions.length > 0;
@@ -129,11 +128,11 @@ export function registerInteractionHandler(client: Client, context: BotContext):
             return;
           }
           if (anyBasic && !anyCustom) {
-            await interaction.showModal(buildBasicModal(basic, existing ?? {}));
+            await interaction.showModal(buildBasicModal(basic, {}));
             return;
           }
           if (!anyBasic && anyCustom) {
-            await interaction.showModal(buildIntroModal(questions, existing?.answers ?? {}));
+            await interaction.showModal(buildIntroModal(questions, {}));
             return;
           }
           await interaction.reply({
@@ -144,21 +143,21 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           return;
         }
 
-        // Intro panel: edit → show select menu of all configured fields
+        // Intro panel: edit → show select menu (deferReply safe: never calls showModal)
         if (customId === EDIT_INTRO_BUTTON_ID) {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const [basic, questions] = await Promise.all([
             context.repo.getBasicSetting(guildId),
             context.repo.getQuestions(guildId),
           ]);
           const editComponents = buildEditSelectMenu(basic, questions);
           if (editComponents.length === 0) {
-            await interaction.reply({ content: "サーバーに自己紹介の質問が設定されていません。", flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ content: "サーバーに自己紹介の質問が設定されていません。" });
             return;
           }
-          await interaction.reply({
+          await interaction.editReply({
             content: "編集する項目を選んでください。",
             components: editComponents,
-            flags: MessageFlags.Ephemeral,
           });
           return;
         }
