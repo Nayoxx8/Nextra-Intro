@@ -25,10 +25,10 @@ const AVATAR_CY = HEADER_TOP + AVATAR_RADIUS;     // 80
 const RIGHT_X = PADDING + AVATAR_RADIUS * 2 + 20; // 156
 const RIGHT_MAX_W = CARD_WIDTH - PADDING - RIGHT_X; // 604
 const USERNAME_Y = HEADER_TOP + 26;               // 58
-const BASIC_LABEL_Y = USERNAME_Y + 18;            // 76
-const BASIC_VALUE_Y = BASIC_LABEL_Y + 18;         // 94
+const BASIC_LABEL_Y = USERNAME_Y + 22;            // 80
+const BASIC_VALUE_Y = BASIC_LABEL_Y + 22;         // 102
 const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
-const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 16) + 24; // 152
+const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 152
 const ROW_HEIGHT = 72;
 const FOOTER_HEIGHT = 48;
 
@@ -77,7 +77,7 @@ function wrapText(
 ): string[] {
   const lines: string[] = [];
   let current = "";
-  for (const ch of text.split("")) {
+  for (const ch of [...text]) {
     const test = current + ch;
     if (ctx.measureText(test).width > maxWidth && current.length > 0) {
       lines.push(current);
@@ -160,11 +160,11 @@ export async function generateIntroCard(params: {
       const { label, value } = activeBasic[i];
       const colX = RIGHT_X + i * colWidth;
 
-      ctx.font = "bold 11px NotoSansJP";
+      ctx.font = "bold 13px NotoSansJP";
       ctx.fillStyle = "#a0a0c0";
       ctx.fillText(label, colX, BASIC_LABEL_Y, colWidth - 8);
 
-      ctx.font = "14px NotoSansJP, NotoEmoji";
+      ctx.font = "17px NotoSansJP, NotoEmoji";
       ctx.fillStyle = "#ffffff";
       ctx.fillText(value, colX, BASIC_VALUE_Y, colWidth - 8);
     }

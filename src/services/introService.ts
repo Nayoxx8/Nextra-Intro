@@ -104,17 +104,17 @@ export async function handleIntroSubmit(
     context.repo.getUserIntro(guildId, user.id),
   ]);
 
-  const displayName =
-    interaction.member instanceof GuildMember
-      ? interaction.member.displayName
-      : user.displayName;
+  const member = interaction.member instanceof GuildMember ? interaction.member : null;
+  const displayName = member?.displayName ?? user.displayName;
+  const avatarUrl = member?.displayAvatarURL({ extension: "png", size: 128 })
+    ?? user.displayAvatarURL({ extension: "png", size: 128 });
 
   await postOrEditImage(
     interaction,
     context,
     guildId,
     () => generateIntroCard({
-      avatarUrl: user.displayAvatarURL({ extension: "png", size: 128 }),
+      avatarUrl,
       username: displayName,
       basic,
       basicFields: {
@@ -153,17 +153,17 @@ export async function handleBasicSubmit(
     context.repo.getUserIntro(guildId, user.id),
   ]);
 
-  const displayName =
-    interaction.member instanceof GuildMember
-      ? interaction.member.displayName
-      : user.displayName;
+  const member = interaction.member instanceof GuildMember ? interaction.member : null;
+  const displayName = member?.displayName ?? user.displayName;
+  const avatarUrl = member?.displayAvatarURL({ extension: "png", size: 128 })
+    ?? user.displayAvatarURL({ extension: "png", size: 128 });
 
   await postOrEditImage(
     interaction,
     context,
     guildId,
     () => generateIntroCard({
-      avatarUrl: user.displayAvatarURL({ extension: "png", size: 128 }),
+      avatarUrl,
       username: displayName,
       basic,
       basicFields: {
@@ -226,17 +226,17 @@ export async function handleSingleFieldEdit(
     saveData = { answers: mergedAnswers };
   }
 
-  const displayName =
-    interaction.member instanceof GuildMember
-      ? interaction.member.displayName
-      : user.displayName;
+  const member = interaction.member instanceof GuildMember ? interaction.member : null;
+  const displayName = member?.displayName ?? user.displayName;
+  const avatarUrl = member?.displayAvatarURL({ extension: "png", size: 128 })
+    ?? user.displayAvatarURL({ extension: "png", size: 128 });
 
   await postOrEditImage(
     interaction,
     context,
     guildId,
     () => generateIntroCard({
-      avatarUrl: user.displayAvatarURL({ extension: "png", size: 128 }),
+      avatarUrl,
       username: displayName,
       basic,
       basicFields: mergedBasic,
