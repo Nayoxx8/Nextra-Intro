@@ -171,30 +171,28 @@ function buildRows(
   return rows;
 }
 
-// ── Font scaling + vertical centering ────────────────────────────────────
-// Card is always CARD_HEIGHT (450px). Fonts shrink when rows don't fit at
-// natural size. The Q&A block is centered vertically in the available area.
+// ── Font scaling ──────────────────────────────────────────────────────────
+// Card is always CARD_HEIGHT (450px).
+// Row height fills QA_AVAILABLE evenly (no upper cap) so there is no dead
+// space below the last row. Fonts shrink only when rows are forced compact.
+// Text within each row is vertically centered regardless of row height.
 
 type CardLayout = {
   rowHeight: number;
   labelSize: number;  // px
   answerSize: number; // px
-  qaTopPad: number;   // offset to center the block vertically
 };
 
 function computeCardLayout(rowCount: number): CardLayout {
-  const rowHeight = rowCount === 0
-    ? ROW_HEIGHT_NATURAL
-    : Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_NATURAL, Math.floor(QA_AVAILABLE / rowCount)));
-  // t = 0 at min row height (smallest fonts), 1 at natural row height (largest fonts)
-  const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (ROW_HEIGHT_NATURAL - ROW_HEIGHT_MIN)));
-  const totalQAHeight = rowCount * rowHeight;
-  const qaTopPad = Math.max(0, Math.floor((QA_AVAILABLE - totalQAHeight) / 2));
+  if (rowCount === 0) return { rowHeight: 0, labelSize: 13, answerSize: 16 };
+  const rowHeight = Math.max(ROW_HEIGHT_MIN, Math.floor(QA_AVAILABLE / rowCount));
+  // Use capped height only for font sizing so text doesn't become huge
+  const fontRef = Math.min(rowHeight, ROW_HEIGHT_NATURAL);
+  const t = Math.max(0, Math.min(1, (fontRef - ROW_HEIGHT_MIN) / (ROW_HEIGHT_NATURAL - ROW_HEIGHT_MIN)));
   return {
     rowHeight,
     labelSize: Math.round(11 + t * 2),   // 11..13 px
     answerSize: Math.round(13 + t * 3),  // 13..16 px
-    qaTopPad,
   };
 }
 
@@ -256,7 +254,7 @@ export async function generateIntroCard(params: {
   const measureCtx = measureCanvas.getContext("2d");
   const rows = buildRows(measureCtx, answeredQuestions, answers);
 
-  const { rowHeight, labelSize, answerSize, qaTopPad } = computeCardLayout(rows.length);
+  const { rowHeight, labelSize, answerSize } = computeCardLayout(rows.length);
   const labelFont = `bold ${labelSize}px NotoSansJP`;
   const answerFont = `${answerSize}px NotoSansJP`;
 
@@ -331,16 +329,27 @@ export async function generateIntroCard(params: {
   ctx.lineTo(CARD_WIDTH - PADDING, DIVIDER_Y);
   ctx.stroke();
 
-  // ── Custom Q&A rows (vertically centered in QA_AVAILABLE) ───────────────
-  let currentY = QA_START_Y + qaTopPad;
+  // ── Custom Q&A rows ──────────────────────────────────────────────────────
+  // Rows expand to fill QA_AVAILABLE; text is centered within each row.
+  let currentY = QA_START_Y;
 
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
 
-    const labelY = currentY + 2;
-    const answerY = labelY + labelSize + 6;
-    const answer2Y = answerY + answerSize + 3;
-    const canFit2Lines = answer2Y + answerSize <= currentY + rowHeight;
+    // Natural text block dimensions (label + gap + answer lines)
+    const naturalLabel = 2;
+    const naturalAnswer = naturalLabel + labelSize + 6;
+    const naturalAnswer2 = naturalAnswer + answerSize + 3;
+    const blockWith2 = naturalAnswer2 + answerSize;
+    const blockWith1 = naturalAnswer + answerSize;
+    const canFit2Lines = blockWith2 <= rowHeight - 2;
+    const blockH = canFit2Lines ? blockWith2 : blockWith1;
+
+    // Shift the text block to the vertical center of the row
+    const vShift = Math.max(0, Math.floor((rowHeight - blockH) / 2));
+    const labelY = currentY + vShift + naturalLabel;
+    const answerY = currentY + vShift + naturalAnswer;
+    const answer2Y = currentY + vShift + naturalAnswer2;
 
     if (row.type === "single") {
       const { q, answer } = row.item;
