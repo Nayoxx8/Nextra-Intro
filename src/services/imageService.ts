@@ -17,6 +17,7 @@ function ensureFonts(): void {
 }
 
 const CARD_WIDTH = 800;
+const CARD_HEIGHT = 450;
 const PADDING = 40;
 const AVATAR_RADIUS = 48;
 const HEADER_TOP = 32;
@@ -31,10 +32,9 @@ const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
 const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
 const FOOTER_HEIGHT = 48;
 const QA_START_Y = DIVIDER_Y + 24;               // 180
+const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 222
 
-// Card height grows with content, capped at MAX. Fonts shrink only when at the cap.
-const MIN_CARD_HEIGHT = 260;
-const MAX_CARD_HEIGHT = 450;
+// Fonts shrink only when many rows are needed; content is vertically centered.
 const ROW_HEIGHT_NATURAL = 56; // row height when fonts are at maximum size
 const ROW_HEIGHT_MIN = 34;     // minimum row height to keep text readable
 
@@ -171,31 +171,30 @@ function buildRows(
   return rows;
 }
 
-// ── Dynamic card height + font scaling ───────────────────────────────────
-// Card height grows naturally with content up to MAX_CARD_HEIGHT.
-// Fonts only shrink when the cap is reached and rows need to compress.
+// ── Font scaling + vertical centering ────────────────────────────────────
+// Card is always CARD_HEIGHT (450px). Fonts shrink when rows don't fit at
+// natural size. The Q&A block is centered vertically in the available area.
 
 type CardLayout = {
-  cardHeight: number;
   rowHeight: number;
   labelSize: number;  // px
   answerSize: number; // px
+  qaTopPad: number;   // offset to center the block vertically
 };
 
 function computeCardLayout(rowCount: number): CardLayout {
-  const naturalHeight = QA_START_Y + rowCount * ROW_HEIGHT_NATURAL + FOOTER_HEIGHT;
-  const cardHeight = Math.max(MIN_CARD_HEIGHT, Math.min(MAX_CARD_HEIGHT, naturalHeight));
-  const qaAvailable = cardHeight - QA_START_Y - FOOTER_HEIGHT;
   const rowHeight = rowCount === 0
     ? ROW_HEIGHT_NATURAL
-    : Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_NATURAL, Math.floor(qaAvailable / rowCount)));
+    : Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_NATURAL, Math.floor(QA_AVAILABLE / rowCount)));
   // t = 0 at min row height (smallest fonts), 1 at natural row height (largest fonts)
   const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (ROW_HEIGHT_NATURAL - ROW_HEIGHT_MIN)));
+  const totalQAHeight = rowCount * rowHeight;
+  const qaTopPad = Math.max(0, Math.floor((QA_AVAILABLE - totalQAHeight) / 2));
   return {
-    cardHeight,
     rowHeight,
     labelSize: Math.round(11 + t * 2),   // 11..13 px
     answerSize: Math.round(13 + t * 3),  // 13..16 px
+    qaTopPad,
   };
 }
 
@@ -257,24 +256,24 @@ export async function generateIntroCard(params: {
   const measureCtx = measureCanvas.getContext("2d");
   const rows = buildRows(measureCtx, answeredQuestions, answers);
 
-  const { cardHeight, rowHeight, labelSize, answerSize } = computeCardLayout(rows.length);
+  const { rowHeight, labelSize, answerSize, qaTopPad } = computeCardLayout(rows.length);
   const labelFont = `bold ${labelSize}px NotoSansJP`;
   const answerFont = `${answerSize}px NotoSansJP`;
 
-  const canvas = createCanvas(CARD_WIDTH, cardHeight);
+  const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
   const ctx = canvas.getContext("2d");
 
   // Background
-  const grad = ctx.createLinearGradient(0, 0, 0, cardHeight);
+  const grad = ctx.createLinearGradient(0, 0, 0, CARD_HEIGHT);
   grad.addColorStop(0, "#1a1a2e");
   grad.addColorStop(1, "#16213e");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CARD_WIDTH, cardHeight);
+  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
   // Border
   ctx.strokeStyle = "rgba(88, 101, 242, 0.3)";
   ctx.lineWidth = 2;
-  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, cardHeight - 2, 12);
+  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, CARD_HEIGHT - 2, 12);
   ctx.stroke();
 
   // ── Avatar ───────────────────────────────────────────────────────────────
@@ -332,8 +331,8 @@ export async function generateIntroCard(params: {
   ctx.lineTo(CARD_WIDTH - PADDING, DIVIDER_Y);
   ctx.stroke();
 
-  // ── Custom Q&A rows ──────────────────────────────────────────────────────
-  let currentY = QA_START_Y;
+  // ── Custom Q&A rows (vertically centered in QA_AVAILABLE) ───────────────
+  let currentY = QA_START_Y + qaTopPad;
 
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
@@ -394,7 +393,7 @@ export async function generateIntroCard(params: {
   }
 
   // ── Footer ───────────────────────────────────────────────────────────────
-  const bottomDividerY = cardHeight - FOOTER_HEIGHT + 4;
+  const bottomDividerY = CARD_HEIGHT - FOOTER_HEIGHT + 4;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -405,7 +404,7 @@ export async function generateIntroCard(params: {
   ctx.font = "11px NotoSansJP";
   ctx.fillStyle = "#404060";
   ctx.textAlign = "right";
-  ctx.fillText("Nextra", CARD_WIDTH - PADDING, cardHeight - 16);
+  ctx.fillText("Nextra", CARD_WIDTH - PADDING, CARD_HEIGHT - 16);
 
   return canvas.toBuffer("image/png");
 }
