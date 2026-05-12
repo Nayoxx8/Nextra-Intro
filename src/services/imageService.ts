@@ -17,6 +17,7 @@ function ensureFonts(): void {
 }
 
 const CARD_WIDTH = 800;
+const CARD_HEIGHT = 450;
 const PADDING = 40;
 const AVATAR_RADIUS = 48;
 const HEADER_TOP = 32;
@@ -29,8 +30,13 @@ const BASIC_LABEL_Y = USERNAME_Y + 26;            // 84
 const BASIC_VALUE_Y = BASIC_LABEL_Y + 28;         // 112
 const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
 const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
-const ROW_HEIGHT = 56;
 const FOOTER_HEIGHT = 48;
+const QA_START_Y = DIVIDER_Y + 24;               // 180
+const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 222
+
+// Row height range for dynamic scaling
+const ROW_HEIGHT_MAX = 56;
+const ROW_HEIGHT_MIN = 34;
 
 const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;       // 720
 const COL_GAP = 16;
@@ -48,22 +54,22 @@ type BasicFields = {
 
 function isEmojiCodePoint(cp: number): boolean {
   return (
-    (cp >= 0x1F600 && cp <= 0x1F64F) || // Emoticons
-    (cp >= 0x1F300 && cp <= 0x1F5FF) || // Misc Symbols and Pictographs
-    (cp >= 0x1F680 && cp <= 0x1F6FF) || // Transport and Map
-    (cp >= 0x1F700 && cp <= 0x1F77F) || // Alchemical
-    (cp >= 0x1F780 && cp <= 0x1F7FF) || // Geometric Shapes Extended
-    (cp >= 0x1F800 && cp <= 0x1F8FF) || // Supplemental Arrows-C
-    (cp >= 0x1F900 && cp <= 0x1F9FF) || // Supplemental Symbols and Pictographs
-    (cp >= 0x1FA00 && cp <= 0x1FAFF) || // Symbols and Pictographs Extended-A
-    (cp >= 0x2600 && cp <= 0x26FF) ||   // Misc Symbols
-    (cp >= 0x2700 && cp <= 0x27BF) ||   // Dingbats
-    (cp >= 0x2B00 && cp <= 0x2BFF) ||   // Misc Symbols and Arrows
-    (cp >= 0x1F1E0 && cp <= 0x1F1FF) || // Regional Indicators (flags)
-    (cp >= 0xFE00 && cp <= 0xFE0F) ||   // Variation Selectors
-    (cp >= 0xE0000 && cp <= 0xE007F) || // Tags
-    cp === 0x200D ||                     // ZWJ
-    cp === 0x20E3                        // Combining Enclosing Keycap
+    (cp >= 0x1F600 && cp <= 0x1F64F) ||
+    (cp >= 0x1F300 && cp <= 0x1F5FF) ||
+    (cp >= 0x1F680 && cp <= 0x1F6FF) ||
+    (cp >= 0x1F700 && cp <= 0x1F77F) ||
+    (cp >= 0x1F780 && cp <= 0x1F7FF) ||
+    (cp >= 0x1F800 && cp <= 0x1F8FF) ||
+    (cp >= 0x1F900 && cp <= 0x1F9FF) ||
+    (cp >= 0x1FA00 && cp <= 0x1FAFF) ||
+    (cp >= 0x2600 && cp <= 0x26FF) ||
+    (cp >= 0x2700 && cp <= 0x27BF) ||
+    (cp >= 0x2B00 && cp <= 0x2BFF) ||
+    (cp >= 0x1F1E0 && cp <= 0x1F1FF) ||
+    (cp >= 0xFE00 && cp <= 0xFE0F) ||
+    (cp >= 0xE0000 && cp <= 0xE007F) ||
+    cp === 0x200D ||
+    cp === 0x20E3
   );
 }
 
@@ -71,7 +77,7 @@ function segmentText(text: string): { text: string; isEmoji: boolean }[] {
   const segs: { text: string; isEmoji: boolean }[] = [];
   let buf = "";
   let curEmoji: boolean | null = null;
-  for (const ch of text) { // iterates Unicode code points
+  for (const ch of text) {
     const emoji = isEmojiCodePoint(ch.codePointAt(0)!);
     if (curEmoji === null || emoji === curEmoji) {
       buf += ch;
@@ -125,6 +131,7 @@ type QARow =
   | { type: "single"; item: QAItem }
   | { type: "pair"; left: QAItem; right: QAItem };
 
+// Measure with max font sizes (conservative: if it fits at max, it fits at any smaller size)
 function canFitHalf(
   ctx: ReturnType<Canvas["getContext"]>,
   label: string,
@@ -164,9 +171,28 @@ function buildRows(
   return rows;
 }
 
-function computeHeight(rowCount: number): number {
-  return Math.max(280, DIVIDER_Y + 16 + rowCount * ROW_HEIGHT + FOOTER_HEIGHT);
+// ── Dynamic font scaling ──────────────────────────────────────────────────
+
+type DynLayout = {
+  rowHeight: number;
+  labelSize: number;  // px
+  answerSize: number; // px
+};
+
+function computeDynLayout(rowCount: number): DynLayout {
+  const rowHeight = rowCount === 0
+    ? ROW_HEIGHT_MAX
+    : Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_MAX, Math.floor(QA_AVAILABLE / rowCount)));
+  // t = 0 at min row height, 1 at max
+  const t = (rowHeight - ROW_HEIGHT_MIN) / (ROW_HEIGHT_MAX - ROW_HEIGHT_MIN);
+  return {
+    rowHeight,
+    labelSize: Math.round(11 + t * 2),   // 11..13 px
+    answerSize: Math.round(13 + t * 3),  // 13..16 px
+  };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
 
 function drawRoundedRect(
   ctx: ReturnType<Canvas["getContext"]>,
@@ -192,7 +218,7 @@ function wrapText(
 ): string[] {
   const lines: string[] = [];
   let current = "";
-  for (const ch of [...text]) { // spread iterates by Unicode code point
+  for (const ch of [...text]) {
     const test = current + ch;
     if (ctx.measureText(test).width > maxWidth && current.length > 0) {
       lines.push(current);
@@ -219,29 +245,32 @@ export async function generateIntroCard(params: {
   const activeBasic = getActiveBasicFields(basic, basicFields);
   const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
 
-  // Measure-only pass to decide row layout
+  // Measure-only pass to decide row layout (uses max font sizes — conservative)
   const measureCanvas = createCanvas(CARD_WIDTH, 200);
   const measureCtx = measureCanvas.getContext("2d");
   const rows = buildRows(measureCtx, answeredQuestions, answers);
 
-  const height = computeHeight(rows.length);
-  const canvas = createCanvas(CARD_WIDTH, height);
+  const { rowHeight, labelSize, answerSize } = computeDynLayout(rows.length);
+  const labelFont = `bold ${labelSize}px NotoSansJP`;
+  const answerFont = `${answerSize}px NotoSansJP`;
+
+  const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
   const ctx = canvas.getContext("2d");
 
   // Background
-  const grad = ctx.createLinearGradient(0, 0, 0, height);
+  const grad = ctx.createLinearGradient(0, 0, 0, CARD_HEIGHT);
   grad.addColorStop(0, "#1a1a2e");
   grad.addColorStop(1, "#16213e");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CARD_WIDTH, height);
+  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
   // Border
   ctx.strokeStyle = "rgba(88, 101, 242, 0.3)";
   ctx.lineWidth = 2;
-  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, height - 2, 12);
+  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, CARD_HEIGHT - 2, 12);
   ctx.stroke();
 
-  // ── Avatar (left) ────────────────────────────────────────────────────────
+  // ── Avatar ───────────────────────────────────────────────────────────────
   try {
     const avatarBuffer = await fetch(avatarUrl).then((r) => r.arrayBuffer());
     const avatarImg = await loadImage(Buffer.from(avatarBuffer));
@@ -272,7 +301,7 @@ export async function generateIntroCard(params: {
   ctx.fillStyle = "#ffffff";
   fillTextSegmented(ctx, username, RIGHT_X, USERNAME_Y, "bold 20px NotoSansJP", 20, RIGHT_X + RIGHT_MAX_W);
 
-  // ── Basic fields (horizontal columns) ────────────────────────────────────
+  // ── Basic fields ─────────────────────────────────────────────────────────
   if (activeBasic.length > 0) {
     const colWidth = Math.floor(RIGHT_MAX_W / activeBasic.length);
     for (let i = 0; i < activeBasic.length; i++) {
@@ -297,25 +326,30 @@ export async function generateIntroCard(params: {
   ctx.stroke();
 
   // ── Custom Q&A rows ──────────────────────────────────────────────────────
-  let currentY = DIVIDER_Y + 24;
+  let currentY = QA_START_Y;
 
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
 
+    // Y positions within this row
+    const labelY = currentY + 2;
+    const answerY = labelY + labelSize + 6;
+    const answer2Y = answerY + answerSize + 3;
+    const canFit2Lines = answer2Y + answerSize <= currentY + rowHeight;
+
     if (row.type === "single") {
       const { q, answer } = row.item;
 
-      ctx.font = "bold 13px NotoSansJP";
+      ctx.font = labelFont;
       ctx.fillStyle = "#a0a0c0";
-      ctx.fillText(q.label, PADDING, currentY, MAX_TEXT_W);
+      ctx.fillText(q.label, PADDING, labelY, MAX_TEXT_W);
 
-      ctx.font = "16px NotoSansJP";
+      ctx.font = answerFont;
       ctx.fillStyle = "#ffffff";
       const lines = wrapText(ctx, answer, MAX_TEXT_W);
-      let lineY = currentY + 22;
-      for (const line of lines.slice(0, 2)) {
-        fillTextSegmented(ctx, line, PADDING, lineY, "16px NotoSansJP", 16);
-        lineY += 22;
+      fillTextSegmented(ctx, lines[0], PADDING, answerY, answerFont, answerSize);
+      if (canFit2Lines && lines[1]) {
+        fillTextSegmented(ctx, lines[1], PADDING, answer2Y, answerFont, answerSize);
       }
     } else {
       const rightColX = PADDING + HALF_WIDTH + COL_GAP;
@@ -323,37 +357,38 @@ export async function generateIntroCard(params: {
       for (const [item, colX] of [[row.left, PADDING], [row.right, rightColX]] as const) {
         const { q, answer } = item;
 
-        ctx.font = "bold 13px NotoSansJP";
+        ctx.font = labelFont;
         ctx.fillStyle = "#a0a0c0";
-        ctx.fillText(q.label, colX, currentY, HALF_WIDTH - 8);
+        ctx.fillText(q.label, colX, labelY, HALF_WIDTH - 8);
 
         ctx.fillStyle = "#ffffff";
-        fillTextSegmented(ctx, answer, colX, currentY + 22, "16px NotoSansJP", 16, colX + HALF_WIDTH - 8);
+        fillTextSegmented(ctx, answer, colX, answerY, answerFont, answerSize, colX + HALF_WIDTH - 8);
       }
 
       // Vertical separator between columns
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY - 4);
-      ctx.lineTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY + ROW_HEIGHT - 12);
+      ctx.moveTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY + 2);
+      ctx.lineTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY + rowHeight - 8);
       ctx.stroke();
     }
 
-    currentY += ROW_HEIGHT;
+    currentY += rowHeight;
 
     if (ri < rows.length - 1) {
+      const divY = currentY - Math.max(6, Math.floor(rowHeight * 0.12));
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(PADDING, currentY - 10);
-      ctx.lineTo(CARD_WIDTH - PADDING, currentY - 10);
+      ctx.moveTo(PADDING, divY);
+      ctx.lineTo(CARD_WIDTH - PADDING, divY);
       ctx.stroke();
     }
   }
 
   // ── Footer ───────────────────────────────────────────────────────────────
-  const bottomDividerY = height - FOOTER_HEIGHT + 4;
+  const bottomDividerY = CARD_HEIGHT - FOOTER_HEIGHT + 4;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -364,7 +399,7 @@ export async function generateIntroCard(params: {
   ctx.font = "11px NotoSansJP";
   ctx.fillStyle = "#404060";
   ctx.textAlign = "right";
-  ctx.fillText("Nextra", CARD_WIDTH - PADDING, height - 16);
+  ctx.fillText("Nextra", CARD_WIDTH - PADDING, CARD_HEIGHT - 16);
 
   return canvas.toBuffer("image/png");
 }
