@@ -29,7 +29,7 @@ const BASIC_LABEL_Y = USERNAME_Y + 26;            // 84
 const BASIC_VALUE_Y = BASIC_LABEL_Y + 28;         // 112
 const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
 const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
-const ROW_HEIGHT = 72;
+const ROW_HEIGHT = 56;
 const FOOTER_HEIGHT = 48;
 
 type BasicFields = {

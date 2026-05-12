@@ -3,10 +3,11 @@ import { env } from "./config.js";
 import { IntroRepository } from "./repositories/introRepository.js";
 import { registerCommandsOnReady } from "./registerCommands.js";
 import { registerInteractionHandler } from "./interactionHandler.js";
+import { registerVoiceHandler } from "./voiceHandler.js";
 import type { BotContext } from "./types.js";
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
 
 const context: BotContext = {
@@ -15,5 +16,6 @@ const context: BotContext = {
 
 registerCommandsOnReady(client, context.repo);
 registerInteractionHandler(client, context);
+registerVoiceHandler(client, context);
 
 client.login(env.DISCORD_TOKEN);
