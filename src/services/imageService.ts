@@ -32,6 +32,10 @@ const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
 const ROW_HEIGHT = 56;
 const FOOTER_HEIGHT = 48;
 
+const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;       // 720
+const COL_GAP = 16;
+const HALF_WIDTH = Math.floor((MAX_TEXT_W - COL_GAP) / 2); // 352
+
 type BasicFields = {
   name?: string | null;
   age?: string | null;
@@ -114,8 +118,54 @@ function getActiveBasicFields(
   return result;
 }
 
-function computeHeight(answeredQuestionCount: number): number {
-  return Math.max(280, DIVIDER_Y + 16 + answeredQuestionCount * ROW_HEIGHT + FOOTER_HEIGHT);
+// ── Q&A row layout ────────────────────────────────────────────────────────
+
+type QAItem = { q: GuildQuestionRecord; answer: string };
+type QARow =
+  | { type: "single"; item: QAItem }
+  | { type: "pair"; left: QAItem; right: QAItem };
+
+function canFitHalf(
+  ctx: ReturnType<Canvas["getContext"]>,
+  label: string,
+  answer: string
+): boolean {
+  ctx.font = "bold 13px NotoSansJP";
+  const labelW = ctx.measureText(label).width;
+  ctx.font = "16px NotoSansJP";
+  const answerW = ctx.measureText(answer).width;
+  return Math.max(labelW, answerW) <= HALF_WIDTH - 8;
+}
+
+function buildRows(
+  ctx: ReturnType<Canvas["getContext"]>,
+  answeredQuestions: GuildQuestionRecord[],
+  answers: Record<string, string>
+): QARow[] {
+  const rows: QARow[] = [];
+  let i = 0;
+  while (i < answeredQuestions.length) {
+    const q = answeredQuestions[i];
+    const answer = answers[String(q.orderIndex)];
+    const fitsLeft = canFitHalf(ctx, q.label, answer);
+
+    if (fitsLeft && i + 1 < answeredQuestions.length) {
+      const q2 = answeredQuestions[i + 1];
+      const answer2 = answers[String(q2.orderIndex)];
+      if (canFitHalf(ctx, q2.label, answer2)) {
+        rows.push({ type: "pair", left: { q, answer }, right: { q: q2, answer: answer2 } });
+        i += 2;
+        continue;
+      }
+    }
+    rows.push({ type: "single", item: { q, answer } });
+    i++;
+  }
+  return rows;
+}
+
+function computeHeight(rowCount: number): number {
+  return Math.max(280, DIVIDER_Y + 16 + rowCount * ROW_HEIGHT + FOOTER_HEIGHT);
 }
 
 function drawRoundedRect(
@@ -168,8 +218,13 @@ export async function generateIntroCard(params: {
   const { avatarUrl, username, basic, basicFields, questions, answers } = params;
   const activeBasic = getActiveBasicFields(basic, basicFields);
   const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
-  const height = computeHeight(answeredQuestions.length);
 
+  // Measure-only pass to decide row layout
+  const measureCanvas = createCanvas(CARD_WIDTH, 200);
+  const measureCtx = measureCanvas.getContext("2d");
+  const rows = buildRows(measureCtx, answeredQuestions, answers);
+
+  const height = computeHeight(rows.length);
   const canvas = createCanvas(CARD_WIDTH, height);
   const ctx = canvas.getContext("2d");
 
@@ -242,29 +297,52 @@ export async function generateIntroCard(params: {
   ctx.stroke();
 
   // ── Custom Q&A rows ──────────────────────────────────────────────────────
-  const maxTextWidth = CARD_WIDTH - PADDING * 2;
   let currentY = DIVIDER_Y + 24;
 
-  for (let i = 0; i < answeredQuestions.length; i++) {
-    const q = answeredQuestions[i];
-    const answerText = answers[String(q.orderIndex)];
+  for (let ri = 0; ri < rows.length; ri++) {
+    const row = rows[ri];
 
-    ctx.font = "bold 13px NotoSansJP";
-    ctx.fillStyle = "#a0a0c0";
-    ctx.fillText(q.label, PADDING, currentY, maxTextWidth);
+    if (row.type === "single") {
+      const { q, answer } = row.item;
 
-    ctx.font = "16px NotoSansJP";
-    ctx.fillStyle = "#ffffff";
-    const lines = wrapText(ctx, answerText, maxTextWidth);
-    let lineY = currentY + 22;
-    for (const line of lines.slice(0, 2)) {
-      fillTextSegmented(ctx, line, PADDING, lineY, "16px NotoSansJP", 16);
-      lineY += 22;
+      ctx.font = "bold 13px NotoSansJP";
+      ctx.fillStyle = "#a0a0c0";
+      ctx.fillText(q.label, PADDING, currentY, MAX_TEXT_W);
+
+      ctx.font = "16px NotoSansJP";
+      ctx.fillStyle = "#ffffff";
+      const lines = wrapText(ctx, answer, MAX_TEXT_W);
+      let lineY = currentY + 22;
+      for (const line of lines.slice(0, 2)) {
+        fillTextSegmented(ctx, line, PADDING, lineY, "16px NotoSansJP", 16);
+        lineY += 22;
+      }
+    } else {
+      const rightColX = PADDING + HALF_WIDTH + COL_GAP;
+
+      for (const [item, colX] of [[row.left, PADDING], [row.right, rightColX]] as const) {
+        const { q, answer } = item;
+
+        ctx.font = "bold 13px NotoSansJP";
+        ctx.fillStyle = "#a0a0c0";
+        ctx.fillText(q.label, colX, currentY, HALF_WIDTH - 8);
+
+        ctx.fillStyle = "#ffffff";
+        fillTextSegmented(ctx, answer, colX, currentY + 22, "16px NotoSansJP", 16, colX + HALF_WIDTH - 8);
+      }
+
+      // Vertical separator between columns
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY - 4);
+      ctx.lineTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY + ROW_HEIGHT - 12);
+      ctx.stroke();
     }
 
     currentY += ROW_HEIGHT;
 
-    if (i < answeredQuestions.length - 1) {
+    if (ri < rows.length - 1) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
       ctx.beginPath();
