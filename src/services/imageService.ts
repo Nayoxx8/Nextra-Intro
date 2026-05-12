@@ -34,9 +34,7 @@ const FOOTER_HEIGHT = 48;
 const QA_START_Y = DIVIDER_Y + 24;               // 180
 const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 222
 
-// Fonts shrink only when many rows are needed; content is vertically centered.
-const ROW_HEIGHT_NATURAL = 56; // row height when fonts are at maximum size
-const ROW_HEIGHT_MIN = 34;     // minimum row height to keep text readable
+const ROW_HEIGHT_MIN = 34; // minimum row height to keep text readable
 
 const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;       // 720
 const COL_GAP = 16;
@@ -131,15 +129,16 @@ type QARow =
   | { type: "single"; item: QAItem }
   | { type: "pair"; left: QAItem; right: QAItem };
 
-// Measure with max font sizes (conservative: fits at max → fits at any smaller size)
 function canFitHalf(
   ctx: ReturnType<Canvas["getContext"]>,
   label: string,
-  answer: string
+  answer: string,
+  labelSize: number,
+  answerSize: number
 ): boolean {
-  ctx.font = "bold 13px NotoSansJP";
+  ctx.font = `bold ${labelSize}px NotoSansJP`;
   const labelW = ctx.measureText(label).width;
-  ctx.font = "16px NotoSansJP";
+  ctx.font = `${answerSize}px NotoSansJP`;
   const answerW = ctx.measureText(answer).width;
   return Math.max(labelW, answerW) <= HALF_WIDTH - 8;
 }
@@ -147,19 +146,21 @@ function canFitHalf(
 function buildRows(
   ctx: ReturnType<Canvas["getContext"]>,
   answeredQuestions: GuildQuestionRecord[],
-  answers: Record<string, string>
+  answers: Record<string, string>,
+  labelSize: number,
+  answerSize: number
 ): QARow[] {
   const rows: QARow[] = [];
   let i = 0;
   while (i < answeredQuestions.length) {
     const q = answeredQuestions[i];
     const answer = answers[String(q.orderIndex)];
-    const fitsLeft = canFitHalf(ctx, q.label, answer);
+    const fitsLeft = canFitHalf(ctx, q.label, answer, labelSize, answerSize);
 
     if (fitsLeft && i + 1 < answeredQuestions.length) {
       const q2 = answeredQuestions[i + 1];
       const answer2 = answers[String(q2.orderIndex)];
-      if (canFitHalf(ctx, q2.label, answer2)) {
+      if (canFitHalf(ctx, q2.label, answer2, labelSize, answerSize)) {
         rows.push({ type: "pair", left: { q, answer }, right: { q: q2, answer: answer2 } });
         i += 2;
         continue;
@@ -172,27 +173,34 @@ function buildRows(
 }
 
 // ── Font scaling ──────────────────────────────────────────────────────────
-// Card is always CARD_HEIGHT (450px).
-// Row height fills QA_AVAILABLE evenly (no upper cap) so there is no dead
-// space below the last row. Fonts shrink only when rows are forced compact.
-// Text within each row is vertically centered regardless of row height.
+// Card is always 800×450px. Row height fills QA_AVAILABLE evenly so no dead
+// space exists between the last row and the footer. Fonts scale with row
+// height in both directions (larger when fewer rows, smaller when more rows).
+// Text within each row is vertically centered.
 
 type CardLayout = {
   rowHeight: number;
-  labelSize: number;  // px
-  answerSize: number; // px
+  labelSize: number;  // px  11..18
+  answerSize: number; // px  13..24
+  labelGap: number;   // px between label baseline and answer baseline
+  lineGap: number;    // px between answer line 1 and line 2
 };
 
 function computeCardLayout(rowCount: number): CardLayout {
-  if (rowCount === 0) return { rowHeight: 0, labelSize: 13, answerSize: 16 };
+  if (rowCount === 0) {
+    return { rowHeight: 0, labelSize: 13, answerSize: 16, labelGap: 6, lineGap: 5 };
+  }
   const rowHeight = Math.max(ROW_HEIGHT_MIN, Math.floor(QA_AVAILABLE / rowCount));
-  // Use capped height only for font sizing so text doesn't become huge
-  const fontRef = Math.min(rowHeight, ROW_HEIGHT_NATURAL);
-  const t = Math.max(0, Math.min(1, (fontRef - ROW_HEIGHT_MIN) / (ROW_HEIGHT_NATURAL - ROW_HEIGHT_MIN)));
+  // t = 0 at minimum row height, 1 at maximum (full QA_AVAILABLE in 1 row)
+  const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (QA_AVAILABLE - ROW_HEIGHT_MIN)));
+  const labelSize = Math.round(11 + t * 7);   // 11..18 px
+  const answerSize = Math.round(13 + t * 11); // 13..24 px
   return {
     rowHeight,
-    labelSize: Math.round(11 + t * 2),   // 11..13 px
-    answerSize: Math.round(13 + t * 3),  // 13..16 px
+    labelSize,
+    answerSize,
+    labelGap: Math.max(4, Math.round(labelSize * 0.45)),   // gap below label
+    lineGap: Math.max(3, Math.round(answerSize * 0.3)),    // gap between answer lines
   };
 }
 
@@ -249,12 +257,15 @@ export async function generateIntroCard(params: {
   const activeBasic = getActiveBasicFields(basic, basicFields);
   const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
 
-  // Measure-only pass to decide row layout (uses max font sizes — conservative)
+  // 2-pass layout: fonts depend on row count, pairing depends on font size.
+  // Pass 1 — assume max fonts (1 row case) → initial pairing → initial row count.
+  // Pass 2 — re-evaluate pairing with the actual font sizes derived from pass 1.
   const measureCanvas = createCanvas(CARD_WIDTH, 200);
   const measureCtx = measureCanvas.getContext("2d");
-  const rows = buildRows(measureCtx, answeredQuestions, answers);
+  const pass1 = computeCardLayout(Math.max(1, Math.ceil(answeredQuestions.length / 2)));
+  const rows = buildRows(measureCtx, answeredQuestions, answers, pass1.labelSize, pass1.answerSize);
 
-  const { rowHeight, labelSize, answerSize } = computeCardLayout(rows.length);
+  const { rowHeight, labelSize, answerSize, labelGap, lineGap } = computeCardLayout(rows.length);
   const labelFont = `bold ${labelSize}px NotoSansJP`;
   const answerFont = `${answerSize}px NotoSansJP`;
 
@@ -336,20 +347,20 @@ export async function generateIntroCard(params: {
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
 
-    // Natural text block dimensions (label + gap + answer lines)
-    const naturalLabel = 2;
-    const naturalAnswer = naturalLabel + labelSize + 6;
-    const naturalAnswer2 = naturalAnswer + answerSize + 3;
-    const blockWith2 = naturalAnswer2 + answerSize;
-    const blockWith1 = naturalAnswer + answerSize;
+    // Natural text block dimensions using proportional gaps
+    const offsetLabel = 2;
+    const offsetAnswer = offsetLabel + labelSize + labelGap;
+    const offsetAnswer2 = offsetAnswer + answerSize + lineGap;
+    const blockWith2 = offsetAnswer2 + answerSize;
+    const blockWith1 = offsetAnswer + answerSize;
     const canFit2Lines = blockWith2 <= rowHeight - 2;
     const blockH = canFit2Lines ? blockWith2 : blockWith1;
 
-    // Shift the text block to the vertical center of the row
+    // Center the text block vertically within the row
     const vShift = Math.max(0, Math.floor((rowHeight - blockH) / 2));
-    const labelY = currentY + vShift + naturalLabel;
-    const answerY = currentY + vShift + naturalAnswer;
-    const answer2Y = currentY + vShift + naturalAnswer2;
+    const labelY = currentY + vShift + offsetLabel;
+    const answerY = currentY + vShift + offsetAnswer;
+    const answer2Y = currentY + vShift + offsetAnswer2;
 
     if (row.type === "single") {
       const { q, answer } = row.item;
