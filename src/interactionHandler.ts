@@ -4,6 +4,7 @@ import { executeIntroSetup } from "./commands/introSetup.js";
 import { executeIntroPanel } from "./commands/introPanel.js";
 import {
   SETUP_SELECT_MENU_ID,
+  SETUP_QUESTION_SUBMENU_ID,
   ADD_QUESTION_MODAL_ID,
   ADD_QUESTION_LABEL_INPUT_ID,
   ADD_QUESTION_REQUIRED_INPUT_ID,
@@ -11,6 +12,7 @@ import {
   SET_CHANNEL_INPUT_ID,
   buildSetupEmbed,
   buildSetupComponents,
+  buildQuestionSubMenu,
   buildAddQuestionModal,
   buildSetChannelModal,
 } from "./panels/setupPanel.js";
@@ -158,12 +160,48 @@ export function registerInteractionHandler(client: Client, context: BotContext):
       if (interaction.isStringSelectMenu()) {
         const { customId } = interaction;
 
-        // Setup panel select menu
+        // Setup panel: main select menu
         if (customId === SETUP_SELECT_MENU_ID) {
           const value = interaction.values[0];
 
-          // These values trigger a modal (must be first response — no deferUpdate)
-          if (value === "add-q") {
+          if (value === "set-channel") {
+            await interaction.showModal(buildSetChannelModal());
+            return;
+          }
+
+          await interaction.deferUpdate();
+
+          if (value === "edit-questions") {
+            const questions = await context.repo.getQuestions(guildId);
+            await interaction.editReply({ components: buildQuestionSubMenu(questions) });
+            return;
+          }
+
+          if (value === "toggle-name") {
+            await context.repo.toggleBasicField(guildId, "nameEnabled");
+          } else if (value === "toggle-age") {
+            await context.repo.toggleBasicField(guildId, "ageEnabled");
+          } else if (value === "toggle-gender") {
+            await context.repo.toggleBasicField(guildId, "genderEnabled");
+          }
+
+          const [questions, setting, basic] = await Promise.all([
+            context.repo.getQuestions(guildId),
+            context.repo.getGuildSetting(guildId),
+            context.repo.getBasicSetting(guildId),
+          ]);
+          await interaction.editReply({
+            embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null, basic)],
+            components: buildSetupComponents(questions.length, basic),
+          });
+          return;
+        }
+
+        // Setup panel: question sub-menu
+        if (customId === SETUP_QUESTION_SUBMENU_ID) {
+          const value = interaction.values[0];
+
+          if (value === "q-add") {
             const count = await context.repo.countQuestions(guildId);
             if (count >= 5) {
               await interaction.reply({ content: "質問は最大5つまでです。", flags: MessageFlags.Ephemeral });
@@ -173,22 +211,24 @@ export function registerInteractionHandler(client: Client, context: BotContext):
             return;
           }
 
-          if (value === "set-channel") {
-            await interaction.showModal(buildSetChannelModal());
+          await interaction.deferUpdate();
+
+          if (value === "q-back") {
+            const [questions, setting, basic] = await Promise.all([
+              context.repo.getQuestions(guildId),
+              context.repo.getGuildSetting(guildId),
+              context.repo.getBasicSetting(guildId),
+            ]);
+            await interaction.editReply({
+              embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null, basic)],
+              components: buildSetupComponents(questions.length, basic),
+            });
             return;
           }
 
-          // Remaining values are immediate updates
-          await interaction.deferUpdate();
-
-          if (value === "remove-q") {
-            await context.repo.deleteLastQuestion(guildId);
-          } else if (value === "toggle-name") {
-            await context.repo.toggleBasicField(guildId, "nameEnabled");
-          } else if (value === "toggle-age") {
-            await context.repo.toggleBasicField(guildId, "ageEnabled");
-          } else if (value === "toggle-gender") {
-            await context.repo.toggleBasicField(guildId, "genderEnabled");
+          if (value.startsWith("q-del:")) {
+            const orderIndex = parseInt(value.slice(6), 10);
+            await context.repo.deleteQuestion(guildId, orderIndex);
           }
 
           const [questions, setting, basic] = await Promise.all([

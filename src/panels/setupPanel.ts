@@ -10,6 +10,7 @@ import {
 import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
 
 export const SETUP_SELECT_MENU_ID = "nextra-intro:setup:select";
+export const SETUP_QUESTION_SUBMENU_ID = "nextra-intro:setup:q-submenu";
 export const ADD_QUESTION_MODAL_ID = "nextra-intro:setup:add-q:modal";
 export const ADD_QUESTION_LABEL_INPUT_ID = "nextra-intro:setup:add-q:label";
 export const ADD_QUESTION_REQUIRED_INPUT_ID = "nextra-intro:setup:add-q:required";
@@ -47,27 +48,11 @@ export function buildSetupComponents(
   questionCount: number,
   basic: GuildBasicSettingRecord
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
-  const options: StringSelectMenuOptionBuilder[] = [];
-
-  if (questionCount < 5) {
-    options.push(
-      new StringSelectMenuOptionBuilder()
-        .setValue("add-q")
-        .setLabel("質問を追加")
-        .setDescription(`カスタム質問を1件追加します（現在 ${questionCount}/5）`)
-    );
-  }
-
-  if (questionCount > 0) {
-    options.push(
-      new StringSelectMenuOptionBuilder()
-        .setValue("remove-q")
-        .setLabel("質問を削除")
-        .setDescription("最後のカスタム質問を削除します")
-    );
-  }
-
-  options.push(
+  const options: StringSelectMenuOptionBuilder[] = [
+    new StringSelectMenuOptionBuilder()
+      .setValue("edit-questions")
+      .setLabel("カスタム質問の編集")
+      .setDescription("質問の追加・削除を行います"),
     new StringSelectMenuOptionBuilder()
       .setValue("set-channel")
       .setLabel("チャンネルを設定")
@@ -83,12 +68,48 @@ export function buildSetupComponents(
     new StringSelectMenuOptionBuilder()
       .setValue("toggle-gender")
       .setLabel(`性別: ${basic.genderEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
-      .setDescription("基礎質問「性別」のON/OFFを切り替えます")
-  );
+      .setDescription("基礎質問「性別」のON/OFFを切り替えます"),
+  ];
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId(SETUP_SELECT_MENU_ID)
     .setPlaceholder("設定項目を選んでください")
+    .addOptions(options);
+
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
+}
+
+export function buildQuestionSubMenu(
+  questions: GuildQuestionRecord[]
+): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const options: StringSelectMenuOptionBuilder[] = [
+    new StringSelectMenuOptionBuilder()
+      .setValue("q-back")
+      .setLabel("← 戻る")
+      .setDescription("メインメニューに戻ります"),
+  ];
+
+  if (questions.length < 5) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setValue("q-add")
+        .setLabel("質問を追加")
+        .setDescription(`新しいカスタム質問を追加します（現在 ${questions.length}/5）`)
+    );
+  }
+
+  for (const q of questions) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setValue(`q-del:${q.orderIndex}`)
+        .setLabel(`「${q.label}」を削除`)
+        .setDescription(q.required ? "必須の質問" : "任意の質問")
+    );
+  }
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(SETUP_QUESTION_SUBMENU_ID)
+    .setPlaceholder("操作を選んでください")
     .addOptions(options);
 
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];

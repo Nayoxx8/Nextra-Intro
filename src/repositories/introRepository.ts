@@ -102,20 +102,19 @@ export class IntroRepository {
   }
 
   async addQuestion(guildId: string, label: string, required: boolean): Promise<void> {
-    const count = await this.countQuestions(guildId);
-    if (count >= 5) throw new Error("question_limit_reached");
+    const questions = await this.getQuestions(guildId);
+    if (questions.length >= 5) throw new Error("question_limit_reached");
+    // Use max orderIndex + 1 to avoid collisions when gaps exist after deletion
+    const nextIndex = questions.length === 0 ? 0 : questions[questions.length - 1].orderIndex + 1;
     await prisma.guildQuestion.create({
-      data: { guildId, orderIndex: count, label, required },
+      data: { guildId, orderIndex: nextIndex, label, required },
     });
     this.questionsCache.delete(guildId);
   }
 
-  async deleteLastQuestion(guildId: string): Promise<void> {
-    const questions = await this.getQuestions(guildId);
-    if (questions.length === 0) return;
-    const last = questions[questions.length - 1];
+  async deleteQuestion(guildId: string, orderIndex: number): Promise<void> {
     await prisma.guildQuestion.delete({
-      where: { guildId_orderIndex: { guildId, orderIndex: last.orderIndex } },
+      where: { guildId_orderIndex: { guildId, orderIndex } },
     });
     this.questionsCache.delete(guildId);
   }
