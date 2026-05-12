@@ -3,12 +3,7 @@ import type { BotContext } from "./types.js";
 import { executeIntroSetup } from "./commands/introSetup.js";
 import { executeIntroPanel } from "./commands/introPanel.js";
 import {
-  ADD_QUESTION_BUTTON_ID,
-  REMOVE_QUESTION_BUTTON_ID,
-  SET_CHANNEL_BUTTON_ID,
-  TOGGLE_NAME_BUTTON_ID,
-  TOGGLE_AGE_BUTTON_ID,
-  TOGGLE_GENDER_BUTTON_ID,
+  SETUP_SELECT_MENU_ID,
   ADD_QUESTION_MODAL_ID,
   ADD_QUESTION_LABEL_INPUT_ID,
   ADD_QUESTION_REQUIRED_INPUT_ID,
@@ -59,59 +54,6 @@ export function registerInteractionHandler(client: Client, context: BotContext):
       // ── Buttons ─────────────────────────────────────────────────────────
       if (interaction.isButton()) {
         const { customId } = interaction;
-
-        // Setup panel: add question
-        if (customId === ADD_QUESTION_BUTTON_ID) {
-          const count = await context.repo.countQuestions(guildId);
-          if (count >= 5) {
-            await interaction.reply({ content: "質問は最大5つまでです。", flags: MessageFlags.Ephemeral });
-            return;
-          }
-          await interaction.showModal(buildAddQuestionModal());
-          return;
-        }
-
-        // Setup panel: remove last question
-        if (customId === REMOVE_QUESTION_BUTTON_ID) {
-          await interaction.deferUpdate();
-          await context.repo.deleteLastQuestion(guildId);
-          const [questions, setting, basic] = await Promise.all([
-            context.repo.getQuestions(guildId),
-            context.repo.getGuildSetting(guildId),
-            context.repo.getBasicSetting(guildId),
-          ]);
-          await interaction.editReply({
-            embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null, basic)],
-            components: buildSetupComponents(questions.length, basic),
-          });
-          return;
-        }
-
-        // Setup panel: set channel
-        if (customId === SET_CHANNEL_BUTTON_ID) {
-          await interaction.showModal(buildSetChannelModal());
-          return;
-        }
-
-        // Setup panel: toggle basic fields
-        if (customId === TOGGLE_NAME_BUTTON_ID || customId === TOGGLE_AGE_BUTTON_ID || customId === TOGGLE_GENDER_BUTTON_ID) {
-          await interaction.deferUpdate();
-          const fieldMap = {
-            [TOGGLE_NAME_BUTTON_ID]: "nameEnabled",
-            [TOGGLE_AGE_BUTTON_ID]: "ageEnabled",
-            [TOGGLE_GENDER_BUTTON_ID]: "genderEnabled",
-          } as const;
-          const basic = await context.repo.toggleBasicField(guildId, fieldMap[customId]);
-          const [questions, setting] = await Promise.all([
-            context.repo.getQuestions(guildId),
-            context.repo.getGuildSetting(guildId),
-          ]);
-          await interaction.editReply({
-            embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null, basic)],
-            components: buildSetupComponents(questions.length, basic),
-          });
-          return;
-        }
 
         // Intro panel: create → smart routing
         if (customId === CREATE_INTRO_BUTTON_ID) {
@@ -215,6 +157,51 @@ export function registerInteractionHandler(client: Client, context: BotContext):
       // ── Select menus ─────────────────────────────────────────────────────
       if (interaction.isStringSelectMenu()) {
         const { customId } = interaction;
+
+        // Setup panel select menu
+        if (customId === SETUP_SELECT_MENU_ID) {
+          const value = interaction.values[0];
+
+          // These values trigger a modal (must be first response — no deferUpdate)
+          if (value === "add-q") {
+            const count = await context.repo.countQuestions(guildId);
+            if (count >= 5) {
+              await interaction.reply({ content: "質問は最大5つまでです。", flags: MessageFlags.Ephemeral });
+              return;
+            }
+            await interaction.showModal(buildAddQuestionModal());
+            return;
+          }
+
+          if (value === "set-channel") {
+            await interaction.showModal(buildSetChannelModal());
+            return;
+          }
+
+          // Remaining values are immediate updates
+          await interaction.deferUpdate();
+
+          if (value === "remove-q") {
+            await context.repo.deleteLastQuestion(guildId);
+          } else if (value === "toggle-name") {
+            await context.repo.toggleBasicField(guildId, "nameEnabled");
+          } else if (value === "toggle-age") {
+            await context.repo.toggleBasicField(guildId, "ageEnabled");
+          } else if (value === "toggle-gender") {
+            await context.repo.toggleBasicField(guildId, "genderEnabled");
+          }
+
+          const [questions, setting, basic] = await Promise.all([
+            context.repo.getQuestions(guildId),
+            context.repo.getGuildSetting(guildId),
+            context.repo.getBasicSetting(guildId),
+          ]);
+          await interaction.editReply({
+            embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null, basic)],
+            components: buildSetupComponents(questions.length, basic),
+          });
+          return;
+        }
 
         if (customId === EDIT_SELECT_MENU_ID) {
           const value = interaction.values[0]; // "basic:name" | "basic:age" | "basic:gender" | "custom:0"

@@ -1,25 +1,20 @@
 import {
   ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   EmbedBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
 import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
 
-export const ADD_QUESTION_BUTTON_ID = "nextra-intro:setup:add-q";
-export const REMOVE_QUESTION_BUTTON_ID = "nextra-intro:setup:remove-q";
-export const SET_CHANNEL_BUTTON_ID = "nextra-intro:setup:set-channel";
+export const SETUP_SELECT_MENU_ID = "nextra-intro:setup:select";
 export const ADD_QUESTION_MODAL_ID = "nextra-intro:setup:add-q:modal";
 export const ADD_QUESTION_LABEL_INPUT_ID = "nextra-intro:setup:add-q:label";
 export const ADD_QUESTION_REQUIRED_INPUT_ID = "nextra-intro:setup:add-q:required";
 export const SET_CHANNEL_MODAL_ID = "nextra-intro:setup:set-channel:modal";
 export const SET_CHANNEL_INPUT_ID = "nextra-intro:setup:set-channel:input";
-export const TOGGLE_NAME_BUTTON_ID = "nextra-intro:setup:toggle-name";
-export const TOGGLE_AGE_BUTTON_ID = "nextra-intro:setup:toggle-age";
-export const TOGGLE_GENDER_BUTTON_ID = "nextra-intro:setup:toggle-gender";
 
 export function buildSetupEmbed(
   questions: GuildQuestionRecord[],
@@ -51,40 +46,52 @@ export function buildSetupEmbed(
 export function buildSetupComponents(
   questionCount: number,
   basic: GuildBasicSettingRecord
-): ActionRowBuilder<ButtonBuilder>[] {
-  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(ADD_QUESTION_BUTTON_ID)
-      .setLabel("質問を追加")
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(questionCount >= 5),
-    new ButtonBuilder()
-      .setCustomId(REMOVE_QUESTION_BUTTON_ID)
-      .setLabel("質問を削除")
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(questionCount === 0),
-    new ButtonBuilder()
-      .setCustomId(SET_CHANNEL_BUTTON_ID)
+): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const options: StringSelectMenuOptionBuilder[] = [];
+
+  if (questionCount < 5) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setValue("add-q")
+        .setLabel("質問を追加")
+        .setDescription(`カスタム質問を1件追加します（現在 ${questionCount}/5）`)
+    );
+  }
+
+  if (questionCount > 0) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setValue("remove-q")
+        .setLabel("質問を削除")
+        .setDescription("最後のカスタム質問を削除します")
+    );
+  }
+
+  options.push(
+    new StringSelectMenuOptionBuilder()
+      .setValue("set-channel")
       .setLabel("チャンネルを設定")
-      .setStyle(ButtonStyle.Secondary)
+      .setDescription("自己紹介の表示先チャンネルを変更します"),
+    new StringSelectMenuOptionBuilder()
+      .setValue("toggle-name")
+      .setLabel(`名前: ${basic.nameEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
+      .setDescription("基礎質問「名前」のON/OFFを切り替えます"),
+    new StringSelectMenuOptionBuilder()
+      .setValue("toggle-age")
+      .setLabel(`年齢: ${basic.ageEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
+      .setDescription("基礎質問「年齢」のON/OFFを切り替えます"),
+    new StringSelectMenuOptionBuilder()
+      .setValue("toggle-gender")
+      .setLabel(`性別: ${basic.genderEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
+      .setDescription("基礎質問「性別」のON/OFFを切り替えます")
   );
 
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(TOGGLE_NAME_BUTTON_ID)
-      .setLabel(`名前: ${basic.nameEnabled ? "ON" : "OFF"}`)
-      .setStyle(basic.nameEnabled ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(TOGGLE_AGE_BUTTON_ID)
-      .setLabel(`年齢: ${basic.ageEnabled ? "ON" : "OFF"}`)
-      .setStyle(basic.ageEnabled ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(TOGGLE_GENDER_BUTTON_ID)
-      .setLabel(`性別: ${basic.genderEnabled ? "ON" : "OFF"}`)
-      .setStyle(basic.genderEnabled ? ButtonStyle.Success : ButtonStyle.Secondary)
-  );
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(SETUP_SELECT_MENU_ID)
+    .setPlaceholder("設定項目を選んでください")
+    .addOptions(options);
 
-  return [row1, row2];
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
 }
 
 export function buildAddQuestionModal(): ModalBuilder {
