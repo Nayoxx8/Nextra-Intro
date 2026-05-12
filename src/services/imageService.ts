@@ -17,7 +17,6 @@ function ensureFonts(): void {
 }
 
 const CARD_WIDTH = 800;
-const CARD_HEIGHT = 450;
 const PADDING = 40;
 const AVATAR_RADIUS = 48;
 const HEADER_TOP = 32;
@@ -32,11 +31,12 @@ const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
 const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
 const FOOTER_HEIGHT = 48;
 const QA_START_Y = DIVIDER_Y + 24;               // 180
-const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 222
 
-// Row height range for dynamic scaling
-const ROW_HEIGHT_MAX = 56;
-const ROW_HEIGHT_MIN = 34;
+// Card height grows with content, capped at MAX. Fonts shrink only when at the cap.
+const MIN_CARD_HEIGHT = 260;
+const MAX_CARD_HEIGHT = 450;
+const ROW_HEIGHT_NATURAL = 56; // row height when fonts are at maximum size
+const ROW_HEIGHT_MIN = 34;     // minimum row height to keep text readable
 
 const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;       // 720
 const COL_GAP = 16;
@@ -131,7 +131,7 @@ type QARow =
   | { type: "single"; item: QAItem }
   | { type: "pair"; left: QAItem; right: QAItem };
 
-// Measure with max font sizes (conservative: if it fits at max, it fits at any smaller size)
+// Measure with max font sizes (conservative: fits at max → fits at any smaller size)
 function canFitHalf(
   ctx: ReturnType<Canvas["getContext"]>,
   label: string,
@@ -171,21 +171,28 @@ function buildRows(
   return rows;
 }
 
-// ── Dynamic font scaling ──────────────────────────────────────────────────
+// ── Dynamic card height + font scaling ───────────────────────────────────
+// Card height grows naturally with content up to MAX_CARD_HEIGHT.
+// Fonts only shrink when the cap is reached and rows need to compress.
 
-type DynLayout = {
+type CardLayout = {
+  cardHeight: number;
   rowHeight: number;
   labelSize: number;  // px
   answerSize: number; // px
 };
 
-function computeDynLayout(rowCount: number): DynLayout {
+function computeCardLayout(rowCount: number): CardLayout {
+  const naturalHeight = QA_START_Y + rowCount * ROW_HEIGHT_NATURAL + FOOTER_HEIGHT;
+  const cardHeight = Math.max(MIN_CARD_HEIGHT, Math.min(MAX_CARD_HEIGHT, naturalHeight));
+  const qaAvailable = cardHeight - QA_START_Y - FOOTER_HEIGHT;
   const rowHeight = rowCount === 0
-    ? ROW_HEIGHT_MAX
-    : Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_MAX, Math.floor(QA_AVAILABLE / rowCount)));
-  // t = 0 at min row height, 1 at max
-  const t = (rowHeight - ROW_HEIGHT_MIN) / (ROW_HEIGHT_MAX - ROW_HEIGHT_MIN);
+    ? ROW_HEIGHT_NATURAL
+    : Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_NATURAL, Math.floor(qaAvailable / rowCount)));
+  // t = 0 at min row height (smallest fonts), 1 at natural row height (largest fonts)
+  const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (ROW_HEIGHT_NATURAL - ROW_HEIGHT_MIN)));
   return {
+    cardHeight,
     rowHeight,
     labelSize: Math.round(11 + t * 2),   // 11..13 px
     answerSize: Math.round(13 + t * 3),  // 13..16 px
@@ -250,24 +257,24 @@ export async function generateIntroCard(params: {
   const measureCtx = measureCanvas.getContext("2d");
   const rows = buildRows(measureCtx, answeredQuestions, answers);
 
-  const { rowHeight, labelSize, answerSize } = computeDynLayout(rows.length);
+  const { cardHeight, rowHeight, labelSize, answerSize } = computeCardLayout(rows.length);
   const labelFont = `bold ${labelSize}px NotoSansJP`;
   const answerFont = `${answerSize}px NotoSansJP`;
 
-  const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
+  const canvas = createCanvas(CARD_WIDTH, cardHeight);
   const ctx = canvas.getContext("2d");
 
   // Background
-  const grad = ctx.createLinearGradient(0, 0, 0, CARD_HEIGHT);
+  const grad = ctx.createLinearGradient(0, 0, 0, cardHeight);
   grad.addColorStop(0, "#1a1a2e");
   grad.addColorStop(1, "#16213e");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
+  ctx.fillRect(0, 0, CARD_WIDTH, cardHeight);
 
   // Border
   ctx.strokeStyle = "rgba(88, 101, 242, 0.3)";
   ctx.lineWidth = 2;
-  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, CARD_HEIGHT - 2, 12);
+  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, cardHeight - 2, 12);
   ctx.stroke();
 
   // ── Avatar ───────────────────────────────────────────────────────────────
@@ -331,7 +338,6 @@ export async function generateIntroCard(params: {
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
 
-    // Y positions within this row
     const labelY = currentY + 2;
     const answerY = labelY + labelSize + 6;
     const answer2Y = answerY + answerSize + 3;
@@ -388,7 +394,7 @@ export async function generateIntroCard(params: {
   }
 
   // ── Footer ───────────────────────────────────────────────────────────────
-  const bottomDividerY = CARD_HEIGHT - FOOTER_HEIGHT + 4;
+  const bottomDividerY = cardHeight - FOOTER_HEIGHT + 4;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -399,7 +405,7 @@ export async function generateIntroCard(params: {
   ctx.font = "11px NotoSansJP";
   ctx.fillStyle = "#404060";
   ctx.textAlign = "right";
-  ctx.fillText("Nextra", CARD_WIDTH - PADDING, CARD_HEIGHT - 16);
+  ctx.fillText("Nextra", CARD_WIDTH - PADDING, cardHeight - 16);
 
   return canvas.toBuffer("image/png");
 }
