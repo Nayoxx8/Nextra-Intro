@@ -25,10 +25,10 @@ const AVATAR_CY = HEADER_TOP + AVATAR_RADIUS;     // 80
 const RIGHT_X = PADDING + AVATAR_RADIUS * 2 + 20; // 156
 const RIGHT_MAX_W = CARD_WIDTH - PADDING - RIGHT_X; // 604
 const USERNAME_Y = HEADER_TOP + 26;               // 58
-const BASIC_LABEL_Y = USERNAME_Y + 22;            // 80
-const BASIC_VALUE_Y = BASIC_LABEL_Y + 22;         // 102
+const BASIC_LABEL_Y = USERNAME_Y + 26;            // 84
+const BASIC_VALUE_Y = BASIC_LABEL_Y + 28;         // 112
 const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
-const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 152
+const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
 const ROW_HEIGHT = 72;
 const FOOTER_HEIGHT = 48;
 
@@ -37,6 +37,71 @@ type BasicFields = {
   age?: string | null;
   gender?: string | null;
 };
+
+// ── Emoji-aware text rendering ────────────────────────────────────────────
+// Font fallback ("A, B") is unreliable in @napi-rs/canvas; we split text
+// into emoji/non-emoji segments and switch ctx.font explicitly per segment.
+
+function isEmojiCodePoint(cp: number): boolean {
+  return (
+    (cp >= 0x1F600 && cp <= 0x1F64F) || // Emoticons
+    (cp >= 0x1F300 && cp <= 0x1F5FF) || // Misc Symbols and Pictographs
+    (cp >= 0x1F680 && cp <= 0x1F6FF) || // Transport and Map
+    (cp >= 0x1F700 && cp <= 0x1F77F) || // Alchemical
+    (cp >= 0x1F780 && cp <= 0x1F7FF) || // Geometric Shapes Extended
+    (cp >= 0x1F800 && cp <= 0x1F8FF) || // Supplemental Arrows-C
+    (cp >= 0x1F900 && cp <= 0x1F9FF) || // Supplemental Symbols and Pictographs
+    (cp >= 0x1FA00 && cp <= 0x1FAFF) || // Symbols and Pictographs Extended-A
+    (cp >= 0x2600 && cp <= 0x26FF) ||   // Misc Symbols
+    (cp >= 0x2700 && cp <= 0x27BF) ||   // Dingbats
+    (cp >= 0x2B00 && cp <= 0x2BFF) ||   // Misc Symbols and Arrows
+    (cp >= 0x1F1E0 && cp <= 0x1F1FF) || // Regional Indicators (flags)
+    (cp >= 0xFE00 && cp <= 0xFE0F) ||   // Variation Selectors
+    (cp >= 0xE0000 && cp <= 0xE007F) || // Tags
+    cp === 0x200D ||                     // ZWJ
+    cp === 0x20E3                        // Combining Enclosing Keycap
+  );
+}
+
+function segmentText(text: string): { text: string; isEmoji: boolean }[] {
+  const segs: { text: string; isEmoji: boolean }[] = [];
+  let buf = "";
+  let curEmoji: boolean | null = null;
+  for (const ch of text) { // iterates Unicode code points
+    const emoji = isEmojiCodePoint(ch.codePointAt(0)!);
+    if (curEmoji === null || emoji === curEmoji) {
+      buf += ch;
+      curEmoji = emoji;
+    } else {
+      segs.push({ text: buf, isEmoji: curEmoji });
+      buf = ch;
+      curEmoji = emoji;
+    }
+  }
+  if (buf) segs.push({ text: buf, isEmoji: curEmoji! });
+  return segs;
+}
+
+function fillTextSegmented(
+  ctx: ReturnType<Canvas["getContext"]>,
+  text: string,
+  x: number,
+  y: number,
+  regularFont: string,
+  emojiSize: number,
+  maxRight?: number
+): void {
+  let cx = x;
+  for (const seg of segmentText(text)) {
+    if (maxRight !== undefined && cx >= maxRight) break;
+    ctx.font = seg.isEmoji ? `${emojiSize}px NotoEmoji` : regularFont;
+    const available = maxRight !== undefined ? maxRight - cx : undefined;
+    ctx.fillText(seg.text, cx, y, available);
+    cx += ctx.measureText(seg.text).width;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 
 function getActiveBasicFields(
   basic: GuildBasicSettingRecord,
@@ -77,7 +142,7 @@ function wrapText(
 ): string[] {
   const lines: string[] = [];
   let current = "";
-  for (const ch of [...text]) {
+  for (const ch of [...text]) { // spread iterates by Unicode code point
     const test = current + ch;
     if (ctx.measureText(test).width > maxWidth && current.length > 0) {
       lines.push(current);
@@ -147,11 +212,10 @@ export async function generateIntroCard(params: {
     ctx.fill();
   }
 
-  // ── Right side: username ─────────────────────────────────────────────────
+  // ── Username ─────────────────────────────────────────────────────────────
   ctx.textAlign = "left";
-  ctx.font = "bold 20px NotoSansJP, NotoEmoji";
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(username, RIGHT_X, USERNAME_Y, RIGHT_MAX_W);
+  fillTextSegmented(ctx, username, RIGHT_X, USERNAME_Y, "bold 20px NotoSansJP", 20, RIGHT_X + RIGHT_MAX_W);
 
   // ── Basic fields (horizontal columns) ────────────────────────────────────
   if (activeBasic.length > 0) {
@@ -160,13 +224,12 @@ export async function generateIntroCard(params: {
       const { label, value } = activeBasic[i];
       const colX = RIGHT_X + i * colWidth;
 
-      ctx.font = "bold 13px NotoSansJP";
+      ctx.font = "bold 16px NotoSansJP";
       ctx.fillStyle = "#a0a0c0";
       ctx.fillText(label, colX, BASIC_LABEL_Y, colWidth - 8);
 
-      ctx.font = "17px NotoSansJP, NotoEmoji";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(value, colX, BASIC_VALUE_Y, colWidth - 8);
+      fillTextSegmented(ctx, value, colX, BASIC_VALUE_Y, "22px NotoSansJP", 22, colX + colWidth - 8);
     }
   }
 
@@ -190,12 +253,12 @@ export async function generateIntroCard(params: {
     ctx.fillStyle = "#a0a0c0";
     ctx.fillText(q.label, PADDING, currentY, maxTextWidth);
 
-    ctx.font = "16px NotoSansJP, NotoEmoji";
+    ctx.font = "16px NotoSansJP";
     ctx.fillStyle = "#ffffff";
     const lines = wrapText(ctx, answerText, maxTextWidth);
     let lineY = currentY + 22;
     for (const line of lines.slice(0, 2)) {
-      ctx.fillText(line, PADDING, lineY, maxTextWidth);
+      fillTextSegmented(ctx, line, PADDING, lineY, "16px NotoSansJP", 16);
       lineY += 22;
     }
 
