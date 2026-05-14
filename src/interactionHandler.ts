@@ -36,6 +36,7 @@ import {
   buildSingleCustomModal,
 } from "./modals/introModal.js";
 import { handleIntroSubmit, handleBasicSubmit, handleSingleFieldEdit } from "./services/introService.js";
+import { checkSubscription } from "./lib/subscriptionGuard.js";
 
 export function registerInteractionHandler(client: Client, context: BotContext): void {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -43,6 +44,13 @@ export function registerInteractionHandler(client: Client, context: BotContext):
     if (!guildId) return;
 
     try {
+      if (!(await checkSubscription(guildId, "Intro"))) {
+        if (interaction.isRepliable()) {
+          try { await interaction.reply({ content: "このBotはこのサーバーでご利用いただけません。ダッシュボードから購入・選択してください。", flags: MessageFlags.Ephemeral }); } catch { /* noop */ }
+        }
+        return;
+      }
+
       // ── Slash commands ──────────────────────────────────────────────────
       if (interaction.isChatInputCommand()) {
         if (interaction.commandName === "自己紹介設定") {
