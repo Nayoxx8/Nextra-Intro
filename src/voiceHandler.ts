@@ -1,5 +1,6 @@
 import { AttachmentBuilder, Events, VoiceChannel, type Client } from "discord.js";
 import type { BotContext } from "./types.js";
+import { checkSubscription } from "./lib/subscriptionGuard.js";
 import { generateIntroCard } from "./services/imageService.js";
 
 export function registerVoiceHandler(client: Client, context: BotContext): void {
@@ -15,6 +16,8 @@ export function registerVoiceHandler(client: Client, context: BotContext): void 
 
     const guildId = newState.guild.id;
     const userId = member.id;
+
+    if (!(await checkSubscription(guildId, "Intro"))) return;
 
     try {
       const intro = await context.repo.getUserIntro(guildId, userId);
