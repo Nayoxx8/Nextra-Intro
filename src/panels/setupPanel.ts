@@ -7,7 +7,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
+import type { GuildQuestionRecord } from "../types.js";
 
 export const SETUP_SELECT_MENU_ID = "nextra-intro:setup:select";
 export const SETUP_QUESTION_SUBMENU_ID = "nextra-intro:setup:q-submenu";
@@ -19,8 +19,7 @@ export const SET_CHANNEL_INPUT_ID = "nextra-intro:setup:set-channel:input";
 
 export function buildSetupEmbed(
   questions: GuildQuestionRecord[],
-  displayChannelId: string | null,
-  basic: GuildBasicSettingRecord
+  displayChannelId: string | null
 ): EmbedBuilder {
   const channelText = displayChannelId ? `<#${displayChannelId}>` : "未設定";
   const questionLines =
@@ -28,47 +27,27 @@ export function buildSetupEmbed(
       ? "質問なし"
       : questions.map((q, i) => `**${i + 1}.** ${q.label}${q.required ? "（必須）" : "（任意）"}`).join("\n");
 
-  const basicLines = [
-    `名前: ${basic.nameEnabled ? "✅ ON" : "❌ OFF"}`,
-    `年齢: ${basic.ageEnabled ? "✅ ON" : "❌ OFF"}`,
-    `性別: ${basic.genderEnabled ? "✅ ON" : "❌ OFF"}`,
-  ].join("　");
-
   return new EmbedBuilder()
     .setTitle("自己紹介 設定パネル")
     .setColor(0x5865f2)
     .addFields(
       { name: "表示チャンネル", value: channelText, inline: false },
-      { name: "基礎質問", value: basicLines, inline: false },
-      { name: `カスタム質問（${questions.length}/5）`, value: questionLines, inline: false }
+      { name: `質問（${questions.length}/5）`, value: questionLines, inline: false }
     );
 }
 
 export function buildSetupComponents(
-  questionCount: number,
-  basic: GuildBasicSettingRecord
+  questionCount: number
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const options: StringSelectMenuOptionBuilder[] = [
     new StringSelectMenuOptionBuilder()
       .setValue("edit-questions")
-      .setLabel("カスタム質問の編集")
+      .setLabel("質問の編集")
       .setDescription("質問の追加・削除を行います"),
     new StringSelectMenuOptionBuilder()
       .setValue("set-channel")
       .setLabel("チャンネルを設定")
       .setDescription("自己紹介の表示先チャンネルを変更します"),
-    new StringSelectMenuOptionBuilder()
-      .setValue("toggle-name")
-      .setLabel(`名前: ${basic.nameEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
-      .setDescription("基礎質問「名前」のON/OFFを切り替えます"),
-    new StringSelectMenuOptionBuilder()
-      .setValue("toggle-age")
-      .setLabel(`年齢: ${basic.ageEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
-      .setDescription("基礎質問「年齢」のON/OFFを切り替えます"),
-    new StringSelectMenuOptionBuilder()
-      .setValue("toggle-gender")
-      .setLabel(`性別: ${basic.genderEnabled ? "ON → OFF に切替" : "OFF → ON に切替"}`)
-      .setDescription("基礎質問「性別」のON/OFFを切り替えます"),
   ];
 
   const menu = new StringSelectMenuBuilder()
@@ -94,7 +73,7 @@ export function buildQuestionSubMenu(
       new StringSelectMenuOptionBuilder()
         .setValue("q-add")
         .setLabel("質問を追加")
-        .setDescription(`新しいカスタム質問を追加します（現在 ${questions.length}/5）`)
+        .setDescription(`新しい質問を追加します（現在 ${questions.length}/5）`)
     );
   }
 

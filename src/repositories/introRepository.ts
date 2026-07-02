@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma.js";
-import type { GuildSettingRecord, GuildBasicSettingRecord, GuildQuestionRecord, UserIntroRecord } from "../types.js";
+import type { GuildSettingRecord, GuildQuestionRecord, UserIntroRecord } from "../types.js";
 
 const CACHE_TTL = 600_000; // 10 minutes
 
@@ -15,7 +15,6 @@ function entry<T>(value: T): CacheEntry<T> {
 
 export class IntroRepository {
   private settingCache = new Map<string, CacheEntry<GuildSettingRecord | null>>();
-  private basicCache = new Map<string, CacheEntry<GuildBasicSettingRecord>>();
   private questionsCache = new Map<string, CacheEntry<GuildQuestionRecord[]>>();
 
   // ── Guild settings ───────────────────────────────────────────────────────
@@ -47,37 +46,6 @@ export class IntroRepository {
     this.settingCache.delete(record.guildId);
   }
 
-  // ── Basic settings ───────────────────────────────────────────────────────
-
-  async getBasicSetting(guildId: string): Promise<GuildBasicSettingRecord> {
-    const cached = this.basicCache.get(guildId);
-    if (fresh(cached)) return cached.value;
-    const row = await prisma.guildBasicSetting.findUnique({ where: { guildId } });
-    const value: GuildBasicSettingRecord = {
-      guildId,
-      nameEnabled: row?.nameEnabled ?? true,
-      ageEnabled: row?.ageEnabled ?? true,
-      genderEnabled: row?.genderEnabled ?? true,
-    };
-    this.basicCache.set(guildId, entry(value));
-    return value;
-  }
-
-  async toggleBasicField(
-    guildId: string,
-    field: "nameEnabled" | "ageEnabled" | "genderEnabled"
-  ): Promise<GuildBasicSettingRecord> {
-    const current = await this.getBasicSetting(guildId);
-    const updated = { ...current, [field]: !current[field] };
-    await prisma.guildBasicSetting.upsert({
-      where: { guildId },
-      create: { guildId, nameEnabled: updated.nameEnabled, ageEnabled: updated.ageEnabled, genderEnabled: updated.genderEnabled },
-      update: { [field]: updated[field] },
-    });
-    this.basicCache.set(guildId, entry(updated));
-    return updated;
-  }
-
   // ── Questions ────────────────────────────────────────────────────────────
 
   async getQuestions(guildId: string): Promise<GuildQuestionRecord[]> {
@@ -104,7 +72,6 @@ export class IntroRepository {
   async addQuestion(guildId: string, label: string, required: boolean): Promise<void> {
     const questions = await this.getQuestions(guildId);
     if (questions.length >= 5) throw new Error("question_limit_reached");
-    // Use max orderIndex + 1 to avoid collisions when gaps exist after deletion
     const nextIndex = questions.length === 0 ? 0 : questions[questions.length - 1].orderIndex + 1;
     await prisma.guildQuestion.create({
       data: { guildId, orderIndex: nextIndex, label, required },
@@ -123,7 +90,6 @@ export class IntroRepository {
     try {
       await Promise.all([
         this.getGuildSetting(guildId),
-        this.getBasicSetting(guildId),
         this.getQuestions(guildId),
       ]);
     } catch (err) {
@@ -142,9 +108,6 @@ export class IntroRepository {
       guildId: row.guildId,
       userId: row.userId,
       answers: row.answers as Record<string, string>,
-      basicName: row.basicName,
-      basicAge: row.basicAge,
-      basicGender: row.basicGender,
       messageId: row.messageId,
     };
   }
@@ -154,18 +117,12 @@ export class IntroRepository {
     userId: string,
     data: {
       answers?: Record<string, string>;
-      basicName?: string | null;
-      basicAge?: string | null;
-      basicGender?: string | null;
       messageId?: string | null;
     }
   ): Promise<void> {
     const existing = await this.getUserIntro(guildId, userId);
     const merged = {
       answers: data.answers ?? existing?.answers ?? {},
-      basicName: data.basicName !== undefined ? data.basicName : (existing?.basicName ?? null),
-      basicAge: data.basicAge !== undefined ? data.basicAge : (existing?.basicAge ?? null),
-      basicGender: data.basicGender !== undefined ? data.basicGender : (existing?.basicGender ?? null),
       messageId: data.messageId !== undefined ? data.messageId : (existing?.messageId ?? null),
     };
     await prisma.userIntro.upsert({

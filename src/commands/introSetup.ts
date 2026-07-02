@@ -22,14 +22,13 @@ export async function executeIntroSetup(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const [questions, setting, basic] = await Promise.all([
+  const [questions, setting] = await Promise.all([
     context.repo.getQuestions(guildId),
     context.repo.getGuildSetting(guildId),
-    context.repo.getBasicSetting(guildId),
   ]);
 
   await interaction.editReply({
-    embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null, basic)],
-    components: buildSetupComponents(questions.length, basic),
+    embeds: [buildSetupEmbed(questions, setting?.displayChannelId ?? null)],
+    components: buildSetupComponents(questions.length),
   });
 }

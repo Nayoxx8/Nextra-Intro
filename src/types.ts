@@ -10,13 +10,6 @@ export type GuildSettingRecord = {
   panelMessageId: string | null;
 };
 
-export type GuildBasicSettingRecord = {
-  guildId: string;
-  nameEnabled: boolean;
-  ageEnabled: boolean;
-  genderEnabled: boolean;
-};
-
 export type GuildQuestionRecord = {
   guildId: string;
   orderIndex: number;
@@ -28,8 +21,5 @@ export type UserIntroRecord = {
   guildId: string;
   userId: string;
   answers: Record<string, string>;
-  basicName: string | null;
-  basicAge: string | null;
-  basicGender: string | null;
   messageId: string | null;
 };

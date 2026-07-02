@@ -99,11 +99,6 @@ export async function handleIntroSubmit(
     }
   }
 
-  const [basic, existing] = await Promise.all([
-    context.repo.getBasicSetting(guildId),
-    context.repo.getUserIntro(guildId, user.id),
-  ]);
-
   const member = interaction.member instanceof GuildMember ? interaction.member : null;
   const displayName = member?.displayName ?? user.displayName;
   const avatarUrl = member?.displayAvatarURL({ extension: "png", size: 128 })
@@ -113,68 +108,8 @@ export async function handleIntroSubmit(
     interaction,
     context,
     guildId,
-    () => generateIntroCard({
-      avatarUrl,
-      username: displayName,
-      basic,
-      basicFields: {
-        name: existing?.basicName,
-        age: existing?.basicAge,
-        gender: existing?.basicGender,
-      },
-      questions,
-      answers,
-    }),
+    () => generateIntroCard({ avatarUrl, username: displayName, questions, answers }),
     { answers }
-  );
-}
-
-export async function handleBasicSubmit(
-  interaction: ModalSubmitInteraction,
-  context: BotContext
-): Promise<void> {
-  const { guildId, user } = interaction;
-  if (!guildId) return;
-
-  const basic = await context.repo.getBasicSetting(guildId);
-
-  const basicName = basic.nameEnabled
-    ? (getField(interaction, "nextra-intro:basic:name") ?? null)
-    : undefined;
-  const basicAge = basic.ageEnabled
-    ? (getField(interaction, "nextra-intro:basic:age") ?? null)
-    : undefined;
-  const basicGender = basic.genderEnabled
-    ? (getField(interaction, "nextra-intro:basic:gender") ?? null)
-    : undefined;
-
-  const [questions, existing] = await Promise.all([
-    context.repo.getQuestions(guildId),
-    context.repo.getUserIntro(guildId, user.id),
-  ]);
-
-  const member = interaction.member instanceof GuildMember ? interaction.member : null;
-  const displayName = member?.displayName ?? user.displayName;
-  const avatarUrl = member?.displayAvatarURL({ extension: "png", size: 128 })
-    ?? user.displayAvatarURL({ extension: "png", size: 128 });
-
-  await postOrEditImage(
-    interaction,
-    context,
-    guildId,
-    () => generateIntroCard({
-      avatarUrl,
-      username: displayName,
-      basic,
-      basicFields: {
-        name: basicName ?? existing?.basicName,
-        age: basicAge ?? existing?.basicAge,
-        gender: basicGender ?? existing?.basicGender,
-      },
-      questions,
-      answers: existing?.answers ?? {},
-    }),
-    { basicName, basicAge, basicGender }
   );
 }
 
@@ -185,45 +120,22 @@ export async function handleSingleFieldEdit(
   const { guildId, user } = interaction;
   if (!guildId) return;
 
-  // customId: nextra-intro:edit:basic:name|age|gender  or  nextra-intro:edit:custom:0
+  // customId: nextra-intro:edit:custom:0
   const parts = interaction.customId.split(":");
-  const editType = parts[2] as "basic" | "custom";
-  const fieldOrIndex = parts[3];
+  const orderIndex = parseInt(parts[3], 10);
 
   const newValue = getField(interaction, EDIT_INPUT_ID);
 
-  const [basic, questions, existing] = await Promise.all([
-    context.repo.getBasicSetting(guildId),
+  const [questions, existing] = await Promise.all([
     context.repo.getQuestions(guildId),
     context.repo.getUserIntro(guildId, user.id),
   ]);
 
-  // Build merged data for image generation
-  const mergedBasic = {
-    name: existing?.basicName ?? null,
-    age: existing?.basicAge ?? null,
-    gender: existing?.basicGender ?? null,
-  };
   const mergedAnswers: Record<string, string> = { ...(existing?.answers ?? {}) };
-
-  let saveData: Parameters<BotContext["repo"]["saveUserIntro"]>[2];
-
-  if (editType === "basic") {
-    const field = fieldOrIndex as "name" | "age" | "gender";
-    mergedBasic[field] = newValue;
-    saveData = {
-      basicName: field === "name" ? newValue : undefined,
-      basicAge: field === "age" ? newValue : undefined,
-      basicGender: field === "gender" ? newValue : undefined,
-    };
+  if (newValue) {
+    mergedAnswers[String(orderIndex)] = newValue;
   } else {
-    const orderIndex = parseInt(fieldOrIndex, 10);
-    if (newValue) {
-      mergedAnswers[String(orderIndex)] = newValue;
-    } else {
-      delete mergedAnswers[String(orderIndex)];
-    }
-    saveData = { answers: mergedAnswers };
+    delete mergedAnswers[String(orderIndex)];
   }
 
   const member = interaction.member instanceof GuildMember ? interaction.member : null;
@@ -235,15 +147,8 @@ export async function handleSingleFieldEdit(
     interaction,
     context,
     guildId,
-    () => generateIntroCard({
-      avatarUrl,
-      username: displayName,
-      basic,
-      basicFields: mergedBasic,
-      questions,
-      answers: mergedAnswers,
-    }),
-    saveData
+    () => generateIntroCard({ avatarUrl, username: displayName, questions, answers: mergedAnswers }),
+    { answers: mergedAnswers }
   );
 }
 

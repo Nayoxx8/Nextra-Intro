@@ -1,7 +1,7 @@
 import { createCanvas, loadImage, GlobalFonts, type Canvas } from "@napi-rs/canvas";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import type { GuildBasicSettingRecord, GuildQuestionRecord } from "../types.js";
+import type { GuildQuestionRecord } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = join(__dirname, "../assets/fonts");
@@ -17,38 +17,28 @@ function ensureFonts(): void {
 }
 
 const CARD_WIDTH = 800;
-const CARD_HEIGHT = 450;
+const CARD_HEIGHT = 600;
 const PADDING = 40;
 const AVATAR_RADIUS = 48;
 const HEADER_TOP = 32;
-const AVATAR_CX = PADDING + AVATAR_RADIUS;        // 88
-const AVATAR_CY = HEADER_TOP + AVATAR_RADIUS;     // 80
-const RIGHT_X = PADDING + AVATAR_RADIUS * 2 + 20; // 156
+const AVATAR_CX = PADDING + AVATAR_RADIUS;         // 88
+const AVATAR_CY = HEADER_TOP + AVATAR_RADIUS;      // 80
+const RIGHT_X = PADDING + AVATAR_RADIUS * 2 + 20;  // 156
 const RIGHT_MAX_W = CARD_WIDTH - PADDING - RIGHT_X; // 604
-const USERNAME_Y = HEADER_TOP + 26;               // 58
-const BASIC_LABEL_Y = USERNAME_Y + 26;            // 84
-const BASIC_VALUE_Y = BASIC_LABEL_Y + 28;         // 112
+const USERNAME_Y = HEADER_TOP + 26;                // 58
 const AVATAR_BOTTOM = HEADER_TOP + AVATAR_RADIUS * 2; // 128
-const DIVIDER_Y = Math.max(AVATAR_BOTTOM, BASIC_VALUE_Y + 20) + 24; // 156
+const DIVIDER_Y = AVATAR_BOTTOM + 24;              // 152
 const FOOTER_HEIGHT = 48;
-const QA_START_Y = DIVIDER_Y + 24;               // 180
-const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 222
+const QA_START_Y = DIVIDER_Y + 24;                // 176
+const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 376
 
-const ROW_HEIGHT_MIN = 34; // minimum row height to keep text readable
+const ROW_HEIGHT_MIN = 34;
 
-const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;       // 720
+const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;        // 720
 const COL_GAP = 16;
 const HALF_WIDTH = Math.floor((MAX_TEXT_W - COL_GAP) / 2); // 352
 
-type BasicFields = {
-  name?: string | null;
-  age?: string | null;
-  gender?: string | null;
-};
-
 // ── Emoji-aware text rendering ────────────────────────────────────────────
-// Font fallback ("A, B") is unreliable in @napi-rs/canvas; we split text
-// into emoji/non-emoji segments and switch ctx.font explicitly per segment.
 
 function isEmojiCodePoint(cp: number): boolean {
   return (
@@ -109,19 +99,6 @@ function fillTextSegmented(
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-
-function getActiveBasicFields(
-  basic: GuildBasicSettingRecord,
-  fields: BasicFields
-): { label: string; value: string }[] {
-  const result: { label: string; value: string }[] = [];
-  if (basic.nameEnabled && fields.name) result.push({ label: "名前", value: fields.name });
-  if (basic.ageEnabled && fields.age) result.push({ label: "年齢", value: fields.age });
-  if (basic.genderEnabled && fields.gender) result.push({ label: "性別", value: fields.gender });
-  return result;
-}
-
 // ── Q&A row layout ────────────────────────────────────────────────────────
 
 type QAItem = { q: GuildQuestionRecord; answer: string };
@@ -173,17 +150,13 @@ function buildRows(
 }
 
 // ── Font scaling ──────────────────────────────────────────────────────────
-// Card is always 800×450px. Row height fills QA_AVAILABLE evenly so no dead
-// space exists between the last row and the footer. Fonts scale with row
-// height in both directions (larger when fewer rows, smaller when more rows).
-// Text within each row is vertically centered.
 
 type CardLayout = {
   rowHeight: number;
-  labelSize: number;  // px  11..18
-  answerSize: number; // px  13..24
-  labelGap: number;   // px between label baseline and answer baseline
-  lineGap: number;    // px between answer line 1 and line 2
+  labelSize: number;
+  answerSize: number;
+  labelGap: number;
+  lineGap: number;
 };
 
 function computeCardLayout(rowCount: number): CardLayout {
@@ -191,7 +164,6 @@ function computeCardLayout(rowCount: number): CardLayout {
     return { rowHeight: 0, labelSize: 13, answerSize: 16, labelGap: 6, lineGap: 5 };
   }
   const rowHeight = Math.max(ROW_HEIGHT_MIN, Math.floor(QA_AVAILABLE / rowCount));
-  // t = 0 at minimum row height, 1 at maximum (full QA_AVAILABLE in 1 row)
   const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (QA_AVAILABLE - ROW_HEIGHT_MIN)));
   const labelSize = Math.round(11 + t * 7);   // 11..18 px
   const answerSize = Math.round(13 + t * 11); // 13..24 px
@@ -199,8 +171,8 @@ function computeCardLayout(rowCount: number): CardLayout {
     rowHeight,
     labelSize,
     answerSize,
-    labelGap: Math.max(4, Math.round(labelSize * 0.45)),   // gap below label
-    lineGap: Math.max(3, Math.round(answerSize * 0.3)),    // gap between answer lines
+    labelGap: Math.max(4, Math.round(labelSize * 0.45)),
+    lineGap: Math.max(3, Math.round(answerSize * 0.3)),
   };
 }
 
@@ -246,20 +218,14 @@ function wrapText(
 export async function generateIntroCard(params: {
   avatarUrl: string;
   username: string;
-  basic: GuildBasicSettingRecord;
-  basicFields: BasicFields;
   questions: GuildQuestionRecord[];
   answers: Record<string, string>;
 }): Promise<Buffer> {
   ensureFonts();
 
-  const { avatarUrl, username, basic, basicFields, questions, answers } = params;
-  const activeBasic = getActiveBasicFields(basic, basicFields);
+  const { avatarUrl, username, questions, answers } = params;
   const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
 
-  // 2-pass layout: fonts depend on row count, pairing depends on font size.
-  // Pass 1 — assume max fonts (1 row case) → initial pairing → initial row count.
-  // Pass 2 — re-evaluate pairing with the actual font sizes derived from pass 1.
   const measureCanvas = createCanvas(CARD_WIDTH, 200);
   const measureCtx = measureCanvas.getContext("2d");
   const pass1 = computeCardLayout(Math.max(1, Math.ceil(answeredQuestions.length / 2)));
@@ -316,22 +282,6 @@ export async function generateIntroCard(params: {
   ctx.fillStyle = "#ffffff";
   fillTextSegmented(ctx, username, RIGHT_X, USERNAME_Y, "bold 20px NotoSansJP", 20, RIGHT_X + RIGHT_MAX_W);
 
-  // ── Basic fields ─────────────────────────────────────────────────────────
-  if (activeBasic.length > 0) {
-    const colWidth = Math.floor(RIGHT_MAX_W / activeBasic.length);
-    for (let i = 0; i < activeBasic.length; i++) {
-      const { label, value } = activeBasic[i];
-      const colX = RIGHT_X + i * colWidth;
-
-      ctx.font = "bold 16px NotoSansJP";
-      ctx.fillStyle = "#a0a0c0";
-      ctx.fillText(label, colX, BASIC_LABEL_Y, colWidth - 8);
-
-      ctx.fillStyle = "#ffffff";
-      fillTextSegmented(ctx, value, colX, BASIC_VALUE_Y, "22px NotoSansJP", 22, colX + colWidth - 8);
-    }
-  }
-
   // ── Divider ──────────────────────────────────────────────────────────────
   ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
@@ -341,13 +291,11 @@ export async function generateIntroCard(params: {
   ctx.stroke();
 
   // ── Custom Q&A rows ──────────────────────────────────────────────────────
-  // Rows expand to fill QA_AVAILABLE; text is centered within each row.
   let currentY = QA_START_Y;
 
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
 
-    // Natural text block dimensions using proportional gaps
     const offsetLabel = 2;
     const offsetAnswer = offsetLabel + labelSize + labelGap;
     const offsetAnswer2 = offsetAnswer + answerSize + lineGap;
@@ -356,7 +304,6 @@ export async function generateIntroCard(params: {
     const canFit2Lines = blockWith2 <= rowHeight - 2;
     const blockH = canFit2Lines ? blockWith2 : blockWith1;
 
-    // Center the text block vertically within the row
     const vShift = Math.max(0, Math.floor((rowHeight - blockH) / 2));
     const labelY = currentY + vShift + offsetLabel;
     const answerY = currentY + vShift + offsetAnswer;
@@ -390,7 +337,6 @@ export async function generateIntroCard(params: {
         fillTextSegmented(ctx, answer, colX, answerY, answerFont, answerSize, colX + HALF_WIDTH - 8);
       }
 
-      // Vertical separator between columns
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
       ctx.beginPath();

@@ -18,16 +18,6 @@ model GuildSetting {
   @@schema("nextra_intro")
 }
 
-model GuildBasicSetting {
-  guildId       String  @id @map("guild_id")
-  nameEnabled   Boolean @default(true)  @map("name_enabled")
-  ageEnabled    Boolean @default(true)  @map("age_enabled")
-  genderEnabled Boolean @default(true)  @map("gender_enabled")
-
-  @@map("guild_basic_settings")
-  @@schema("nextra_intro")
-}
-
 model GuildQuestion {
   guildId    String  @map("guild_id")
   orderIndex Int     @map("order_index")
@@ -40,13 +30,10 @@ model GuildQuestion {
 }
 
 model UserIntro {
-  guildId     String  @map("guild_id")
-  userId      String  @map("user_id")
-  answers     Json    @default("{}")
-  basicName   String? @map("basic_name")
-  basicAge    String? @map("basic_age")
-  basicGender String? @map("basic_gender")
-  messageId   String? @map("message_id")
+  guildId   String @map("guild_id")
+  userId    String @map("user_id")
+  answers   Json   @default("{}")
+  messageId String? @map("message_id")
 
   @@id([guildId, userId])
   @@map("user_intros")
