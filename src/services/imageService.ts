@@ -32,11 +32,9 @@ const FOOTER_HEIGHT = 48;
 const QA_START_Y = DIVIDER_Y + 24;                // 176
 const QA_AVAILABLE = CARD_HEIGHT - QA_START_Y - FOOTER_HEIGHT; // 376
 
-const ROW_HEIGHT_MIN = 34;
+const ROW_HEIGHT_MIN = 40;
 
 const MAX_TEXT_W = CARD_WIDTH - PADDING * 2;        // 720
-const COL_GAP = 16;
-const HALF_WIDTH = Math.floor((MAX_TEXT_W - COL_GAP) / 2); // 352
 
 // ── Emoji-aware text rendering ────────────────────────────────────────────
 
@@ -102,52 +100,6 @@ function fillTextSegmented(
 // ── Q&A row layout ────────────────────────────────────────────────────────
 
 type QAItem = { q: GuildQuestionRecord; answer: string };
-type QARow =
-  | { type: "single"; item: QAItem }
-  | { type: "pair"; left: QAItem; right: QAItem };
-
-function canFitHalf(
-  ctx: ReturnType<Canvas["getContext"]>,
-  label: string,
-  answer: string,
-  labelSize: number,
-  answerSize: number
-): boolean {
-  ctx.font = `bold ${labelSize}px NotoSansJP`;
-  const labelW = ctx.measureText(label).width;
-  ctx.font = `${answerSize}px NotoSansJP`;
-  const answerW = ctx.measureText(answer).width;
-  return Math.max(labelW, answerW) <= HALF_WIDTH - 8;
-}
-
-function buildRows(
-  ctx: ReturnType<Canvas["getContext"]>,
-  answeredQuestions: GuildQuestionRecord[],
-  answers: Record<string, string>,
-  labelSize: number,
-  answerSize: number
-): QARow[] {
-  const rows: QARow[] = [];
-  let i = 0;
-  while (i < answeredQuestions.length) {
-    const q = answeredQuestions[i];
-    const answer = answers[String(q.orderIndex)];
-    const fitsLeft = canFitHalf(ctx, q.label, answer, labelSize, answerSize);
-
-    if (fitsLeft && i + 1 < answeredQuestions.length) {
-      const q2 = answeredQuestions[i + 1];
-      const answer2 = answers[String(q2.orderIndex)];
-      if (canFitHalf(ctx, q2.label, answer2, labelSize, answerSize)) {
-        rows.push({ type: "pair", left: { q, answer }, right: { q: q2, answer: answer2 } });
-        i += 2;
-        continue;
-      }
-    }
-    rows.push({ type: "single", item: { q, answer } });
-    i++;
-  }
-  return rows;
-}
 
 // ── Font scaling ──────────────────────────────────────────────────────────
 
@@ -161,18 +113,18 @@ type CardLayout = {
 
 function computeCardLayout(rowCount: number): CardLayout {
   if (rowCount === 0) {
-    return { rowHeight: 0, labelSize: 13, answerSize: 16, labelGap: 6, lineGap: 5 };
+    return { rowHeight: 0, labelSize: 14, answerSize: 20, labelGap: 6, lineGap: 5 };
   }
   const rowHeight = Math.max(ROW_HEIGHT_MIN, Math.floor(QA_AVAILABLE / rowCount));
   const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (QA_AVAILABLE - ROW_HEIGHT_MIN)));
-  const labelSize = Math.round(11 + t * 7);   // 11..18 px
-  const answerSize = Math.round(13 + t * 11); // 13..24 px
+  const labelSize = Math.round(12 + t * 16);  // 12..28 px
+  const answerSize = Math.round(18 + t * 26); // 18..44 px
   return {
     rowHeight,
     labelSize,
     answerSize,
     labelGap: Math.max(4, Math.round(labelSize * 0.45)),
-    lineGap: Math.max(3, Math.round(answerSize * 0.3)),
+    lineGap: Math.max(3, Math.round(answerSize * 0.25)),
   };
 }
 
@@ -225,11 +177,7 @@ export async function generateIntroCard(params: {
 
   const { avatarUrl, username, questions, answers } = params;
   const answeredQuestions = questions.filter((q) => !!answers[String(q.orderIndex)]);
-
-  const measureCanvas = createCanvas(CARD_WIDTH, 200);
-  const measureCtx = measureCanvas.getContext("2d");
-  const pass1 = computeCardLayout(Math.max(1, Math.ceil(answeredQuestions.length / 2)));
-  const rows = buildRows(measureCtx, answeredQuestions, answers, pass1.labelSize, pass1.answerSize);
+  const rows: QAItem[] = answeredQuestions.map((q) => ({ q, answer: answers[String(q.orderIndex)] }));
 
   const { rowHeight, labelSize, answerSize, labelGap, lineGap } = computeCardLayout(rows.length);
   const labelFont = `bold ${labelSize}px NotoSansJP`;
@@ -290,11 +238,11 @@ export async function generateIntroCard(params: {
   ctx.lineTo(CARD_WIDTH - PADDING, DIVIDER_Y);
   ctx.stroke();
 
-  // ── Custom Q&A rows ──────────────────────────────────────────────────────
+  // ── Q&A rows (single column) ─────────────────────────────────────────────
   let currentY = QA_START_Y;
 
   for (let ri = 0; ri < rows.length; ri++) {
-    const row = rows[ri];
+    const { q, answer } = rows[ri];
 
     const offsetLabel = 2;
     const offsetAnswer = offsetLabel + labelSize + labelGap;
@@ -309,40 +257,16 @@ export async function generateIntroCard(params: {
     const answerY = currentY + vShift + offsetAnswer;
     const answer2Y = currentY + vShift + offsetAnswer2;
 
-    if (row.type === "single") {
-      const { q, answer } = row.item;
+    ctx.font = labelFont;
+    ctx.fillStyle = "#a0a0c0";
+    ctx.fillText(q.label, PADDING, labelY, MAX_TEXT_W);
 
-      ctx.font = labelFont;
-      ctx.fillStyle = "#a0a0c0";
-      ctx.fillText(q.label, PADDING, labelY, MAX_TEXT_W);
-
-      ctx.font = answerFont;
-      ctx.fillStyle = "#ffffff";
-      const lines = wrapText(ctx, answer, MAX_TEXT_W);
-      fillTextSegmented(ctx, lines[0], PADDING, answerY, answerFont, answerSize);
-      if (canFit2Lines && lines[1]) {
-        fillTextSegmented(ctx, lines[1], PADDING, answer2Y, answerFont, answerSize);
-      }
-    } else {
-      const rightColX = PADDING + HALF_WIDTH + COL_GAP;
-
-      for (const [item, colX] of [[row.left, PADDING], [row.right, rightColX]] as const) {
-        const { q, answer } = item;
-
-        ctx.font = labelFont;
-        ctx.fillStyle = "#a0a0c0";
-        ctx.fillText(q.label, colX, labelY, HALF_WIDTH - 8);
-
-        ctx.fillStyle = "#ffffff";
-        fillTextSegmented(ctx, answer, colX, answerY, answerFont, answerSize, colX + HALF_WIDTH - 8);
-      }
-
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY + 2);
-      ctx.lineTo(PADDING + HALF_WIDTH + COL_GAP / 2, currentY + rowHeight - 8);
-      ctx.stroke();
+    ctx.font = answerFont;
+    ctx.fillStyle = "#ffffff";
+    const lines = wrapText(ctx, answer, MAX_TEXT_W);
+    fillTextSegmented(ctx, lines[0], PADDING, answerY, answerFont, answerSize);
+    if (canFit2Lines && lines[1]) {
+      fillTextSegmented(ctx, lines[1], PADDING, answer2Y, answerFont, answerSize);
     }
 
     currentY += rowHeight;
