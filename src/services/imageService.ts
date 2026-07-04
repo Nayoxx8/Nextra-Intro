@@ -116,9 +116,9 @@ function computeCardLayout(rowCount: number): CardLayout {
     return { rowHeight: 0, labelSize: 14, answerSize: 20, labelGap: 6, lineGap: 5 };
   }
   const rowHeight = Math.max(ROW_HEIGHT_MIN, Math.floor(QA_AVAILABLE / rowCount));
-  const t = Math.max(0, Math.min(1, (rowHeight - ROW_HEIGHT_MIN) / (QA_AVAILABLE - ROW_HEIGHT_MIN)));
-  const labelSize = Math.round(12 + t * 16);  // 12..28 px
-  const answerSize = Math.round(18 + t * 26); // 18..44 px
+  // フォントサイズを行の高さに直接比例させる
+  const answerSize = Math.min(60, Math.max(14, Math.floor(rowHeight * 0.25)));
+  const labelSize = Math.min(30, Math.max(10, Math.floor(rowHeight * 0.13)));
   return {
     rowHeight,
     labelSize,
