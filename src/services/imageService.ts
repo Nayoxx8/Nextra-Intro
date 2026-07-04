@@ -5,6 +5,7 @@ import type { GuildQuestionRecord } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = join(__dirname, "../assets/fonts");
+const BACKGROUNDS_DIR = join(__dirname, "../assets/backgrounds");
 
 let fontsRegistered = false;
 
@@ -187,17 +188,13 @@ export async function generateIntroCard(params: {
   const ctx = canvas.getContext("2d");
 
   // Background
-  const grad = ctx.createLinearGradient(0, 0, 0, CARD_HEIGHT);
-  grad.addColorStop(0, "#1a1a2e");
-  grad.addColorStop(1, "#16213e");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-
-  // Border
-  ctx.strokeStyle = "rgba(88, 101, 242, 0.3)";
-  ctx.lineWidth = 2;
-  drawRoundedRect(ctx, 1, 1, CARD_WIDTH - 2, CARD_HEIGHT - 2, 12);
-  ctx.stroke();
+  try {
+    const bgImg = await loadImage(join(BACKGROUNDS_DIR, "default.png"));
+    ctx.drawImage(bgImg, 0, 0, CARD_WIDTH, CARD_HEIGHT);
+  } catch {
+    ctx.fillStyle = "#f5f5f5";
+    ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
+  }
 
   // ── Avatar ───────────────────────────────────────────────────────────────
   try {
@@ -227,11 +224,11 @@ export async function generateIntroCard(params: {
 
   // ── Username ─────────────────────────────────────────────────────────────
   ctx.textAlign = "left";
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = "#1a1a2e";
   fillTextSegmented(ctx, username, RIGHT_X, USERNAME_Y, "bold 20px NotoSansJP", 20, RIGHT_X + RIGHT_MAX_W);
 
   // ── Divider ──────────────────────────────────────────────────────────────
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.12)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(PADDING, DIVIDER_Y);
@@ -258,11 +255,11 @@ export async function generateIntroCard(params: {
     const answer2Y = currentY + vShift + offsetAnswer2;
 
     ctx.font = labelFont;
-    ctx.fillStyle = "#a0a0c0";
+    ctx.fillStyle = "#555577";
     ctx.fillText(q.label, PADDING, labelY, MAX_TEXT_W);
 
     ctx.font = answerFont;
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#1a1a2e";
     const lines = wrapText(ctx, answer, MAX_TEXT_W);
     fillTextSegmented(ctx, lines[0], PADDING, answerY, answerFont, answerSize);
     if (canFit2Lines && lines[1]) {
@@ -273,7 +270,7 @@ export async function generateIntroCard(params: {
 
     if (ri < rows.length - 1) {
       const divY = currentY - Math.max(6, Math.floor(rowHeight * 0.12));
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.07)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(PADDING, divY);
@@ -284,7 +281,7 @@ export async function generateIntroCard(params: {
 
   // ── Footer ───────────────────────────────────────────────────────────────
   const bottomDividerY = CARD_HEIGHT - FOOTER_HEIGHT + 4;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(PADDING, bottomDividerY);
@@ -292,7 +289,7 @@ export async function generateIntroCard(params: {
   ctx.stroke();
 
   ctx.font = "11px NotoSansJP";
-  ctx.fillStyle = "#404060";
+  ctx.fillStyle = "#888899";
   ctx.textAlign = "right";
   ctx.fillText("Nextra", CARD_WIDTH - PADDING, CARD_HEIGHT - 16);
 
