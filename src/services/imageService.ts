@@ -235,6 +235,20 @@ export async function generateIntroCard(params: {
   ctx.lineTo(CARD_WIDTH - PADDING, DIVIDER_Y);
   ctx.stroke();
 
+  // ── Q&A background block ─────────────────────────────────────────────────
+  if (rows.length > 0) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.60)";
+    drawRoundedRect(
+      ctx,
+      PADDING - 8,
+      QA_START_Y - 8,
+      CARD_WIDTH - (PADDING - 8) * 2,
+      QA_AVAILABLE + 16,
+      6
+    );
+    ctx.fill();
+  }
+
   // ── Q&A rows (single column) ─────────────────────────────────────────────
   let currentY = QA_START_Y;
 
