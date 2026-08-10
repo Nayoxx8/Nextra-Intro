@@ -305,7 +305,7 @@ export async function generateIntroCard(params: {
   ctx.font = "11px NotoSansJP";
   ctx.fillStyle = "#888899";
   ctx.textAlign = "right";
-  ctx.fillText("Nextra", CARD_WIDTH - PADDING, CARD_HEIGHT - 16);
+  ctx.fillText("Nexbase", CARD_WIDTH - PADDING, CARD_HEIGHT - 16);
 
   return canvas.toBuffer("image/png");
 }

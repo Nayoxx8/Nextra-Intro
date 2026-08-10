@@ -6,8 +6,8 @@ import {
 } from "discord.js";
 import type { GuildQuestionRecord } from "../types.js";
 
-export const INTRO_MODAL_ID = "nextra-intro:user:modal";
-export const EDIT_INPUT_ID = "nextra-intro:edit:input";
+export const INTRO_MODAL_ID = "nexbase-intro:user:modal";
+export const EDIT_INPUT_ID = "nexbase-intro:edit:input";
 
 export function buildIntroModal(
   questions: GuildQuestionRecord[],
@@ -17,7 +17,7 @@ export function buildIntroModal(
 
   for (const q of questions) {
     const input = new TextInputBuilder()
-      .setCustomId(`nextra-intro:answer:${q.orderIndex}`)
+      .setCustomId(`nexbase-intro:answer:${q.orderIndex}`)
       .setLabel(q.label)
       .setStyle(TextInputStyle.Short)
       .setMaxLength(100)
@@ -39,7 +39,7 @@ export function buildSingleCustomModal(
   const title = `${q.label}を編集`.slice(0, 45);
 
   const modal = new ModalBuilder()
-    .setCustomId(`nextra-intro:edit:custom:${q.orderIndex}`)
+    .setCustomId(`nexbase-intro:edit:custom:${q.orderIndex}`)
     .setTitle(title);
 
   const input = new TextInputBuilder()

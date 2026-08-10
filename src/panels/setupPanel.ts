@@ -9,13 +9,13 @@ import {
 } from "discord.js";
 import type { GuildQuestionRecord } from "../types.js";
 
-export const SETUP_SELECT_MENU_ID = "nextra-intro:setup:select";
-export const SETUP_QUESTION_SUBMENU_ID = "nextra-intro:setup:q-submenu";
-export const ADD_QUESTION_MODAL_ID = "nextra-intro:setup:add-q:modal";
-export const ADD_QUESTION_LABEL_INPUT_ID = "nextra-intro:setup:add-q:label";
-export const ADD_QUESTION_REQUIRED_INPUT_ID = "nextra-intro:setup:add-q:required";
-export const SET_CHANNEL_MODAL_ID = "nextra-intro:setup:set-channel:modal";
-export const SET_CHANNEL_INPUT_ID = "nextra-intro:setup:set-channel:input";
+export const SETUP_SELECT_MENU_ID = "nexbase-intro:setup:select";
+export const SETUP_QUESTION_SUBMENU_ID = "nexbase-intro:setup:q-submenu";
+export const ADD_QUESTION_MODAL_ID = "nexbase-intro:setup:add-q:modal";
+export const ADD_QUESTION_LABEL_INPUT_ID = "nexbase-intro:setup:add-q:label";
+export const ADD_QUESTION_REQUIRED_INPUT_ID = "nexbase-intro:setup:add-q:required";
+export const SET_CHANNEL_MODAL_ID = "nexbase-intro:setup:set-channel:modal";
+export const SET_CHANNEL_INPUT_ID = "nexbase-intro:setup:set-channel:input";
 
 export function buildSetupEmbed(
   questions: GuildQuestionRecord[],

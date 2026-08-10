@@ -1,4 +1,4 @@
-# Nextra-Intro
+# Nexbase-Intro
 
 ## 役割
 
@@ -23,7 +23,7 @@ npm run db:push      # DB スキーマを適用
 
 ```
 DISCORD_TOKEN=
-DATABASE_URL=      # PostgreSQL 接続文字列（nextra_intro スキーマ）
+DATABASE_URL=      # PostgreSQL 接続文字列（nexbase_intro スキーマ）
 ```
 
 ---
@@ -55,12 +55,12 @@ src/
     ├── prisma.ts          # Prisma クライアント シングルトン
     └── subscriptionGuard.ts # サブスクリプション認証
 prisma/
-└── schema.prisma          # DB スキーマ（nextra_intro スキーマ）
+└── schema.prisma          # DB スキーマ（nexbase_intro スキーマ）
 ```
 
 ---
 
-## DBスキーマ（Prisma・スキーマ名: `nextra_intro`）
+## DBスキーマ（Prisma・スキーマ名: `nexbase_intro`）
 
 ```
 GuildSetting         # パネル設置先チャンネル・メッセージID

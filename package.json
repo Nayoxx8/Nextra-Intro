@@ -1,7 +1,7 @@
 {
-  "name": "nextra-intro",
+  "name": "nexbase-intro",
   "version": "1.0.0",
-  "description": "Discord self-introduction bot for Nextra (image-based, configurable questions)",
+  "description": "Discord self-introduction bot for Nexbase (image-based, configurable questions)",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

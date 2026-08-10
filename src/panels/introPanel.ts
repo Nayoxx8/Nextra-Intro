@@ -8,9 +8,9 @@ import {
 } from "discord.js";
 import type { GuildQuestionRecord } from "../types.js";
 
-export const CREATE_INTRO_BUTTON_ID = "nextra-intro:user:create";
-export const EDIT_INTRO_BUTTON_ID = "nextra-intro:user:edit";
-export const EDIT_SELECT_MENU_ID = "nextra-intro:user:edit:select";
+export const CREATE_INTRO_BUTTON_ID = "nexbase-intro:user:create";
+export const EDIT_INTRO_BUTTON_ID = "nexbase-intro:user:edit";
+export const EDIT_SELECT_MENU_ID = "nexbase-intro:user:edit:select";
 
 export function buildIntroPanelEmbed(): EmbedBuilder {
   return new EmbedBuilder()

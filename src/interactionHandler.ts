@@ -233,7 +233,7 @@ export function registerInteractionHandler(client: Client, context: BotContext):
           return;
         }
 
-        if (customId.startsWith("nextra-intro:edit:custom:")) {
+        if (customId.startsWith("nexbase-intro:edit:custom:")) {
           await handleSingleFieldEdit(interaction, context);
           return;
         }

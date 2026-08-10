@@ -87,7 +87,7 @@ export async function handleIntroSubmit(
   const answers: Record<string, string> = {};
   for (const q of questions) {
     try {
-      const val = interaction.fields.getTextInputValue(`nextra-intro:answer:${q.orderIndex}`).trim();
+      const val = interaction.fields.getTextInputValue(`nexbase-intro:answer:${q.orderIndex}`).trim();
       if (val) answers[String(q.orderIndex)] = val;
     } catch { /* optional field */ }
   }
@@ -120,7 +120,7 @@ export async function handleSingleFieldEdit(
   const { guildId, user } = interaction;
   if (!guildId) return;
 
-  // customId: nextra-intro:edit:custom:0
+  // customId: nexbase-intro:edit:custom:0
   const parts = interaction.customId.split(":");
   const orderIndex = parseInt(parts[3], 10);
 
