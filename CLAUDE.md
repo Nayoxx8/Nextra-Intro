@@ -12,7 +12,8 @@
 ```bash
 npm run dev       # tsx watch（ホットリロード）
 npm run build     # prisma generate + tsc + assets コピー
-npm run start     # prisma db push → node dist/index.js（本番）
+npm run start     # node dist/index.js（本番）
+npm run db:push   # スキーマ変更時に手動で実行する（起動時の自動適用は廃止）
 npm run db:generate  # Prisma クライアント生成
 npm run db:push      # DB スキーマを適用
 ```
